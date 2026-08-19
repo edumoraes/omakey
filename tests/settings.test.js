@@ -1,0 +1,84 @@
+const { test } = require("node:test")
+const assert = require("node:assert")
+const Settings = require("../SettingsModel.js")
+
+// Mirrors PluginRegistry.findEntryLocation: the bar layout is searched first
+// and plugins[] second. Read and write have to agree on which entry is
+// authoritative, or the panel saves into one object and the service reads
+// another.
+test("the bar layout entry wins over a plugins[] entry", () => {
+  const config = {
+    bar: { layout: { left: [], center: [], right: [{ id: "omakey", intensity: "insistent" }] } },
+    plugins: [{ id: "omakey", intensity: "discreet" }]
+  }
+  assert.strictEqual(Settings.resolveEntry(config, "omakey").intensity, "insistent")
+})
+
+test("plugins[] is used when the widget is not on the bar", () => {
+  const config = { bar: { layout: { left: [], center: [], right: [] } }, plugins: [{ id: "omakey", intensity: "discreet" }] }
+  assert.strictEqual(Settings.resolveEntry(config, "omakey").intensity, "discreet")
+})
+
+test("every bar section is searched", () => {
+  const config = { bar: { layout: { left: [{ id: "omakey" }], center: [], right: [] } }, plugins: [] }
+  assert.ok(Settings.resolveEntry(config, "omakey"))
+})
+
+test("an absent plugin resolves to null", () => {
+  assert.strictEqual(Settings.resolveEntry({ bar: {}, plugins: [] }, "omakey"), null)
+  assert.strictEqual(Settings.resolveEntry(null, "omakey"), null)
+})
+
+test("defaults apply when there is no entry at all", () => {
+  const settings = Settings.read(null)
+  assert.strictEqual(settings.toastPosition, "bottom-center")
+  assert.strictEqual(settings.intensity, "balanced")
+  assert.deepStrictEqual(settings.mutedCategories, [])
+})
+
+test("valid values are carried through", () => {
+  const settings = Settings.read({ id: "omakey", toastPosition: "top-right", intensity: "discreet", mutedCategories: ["windows"] })
+  assert.strictEqual(settings.toastPosition, "top-right")
+  assert.strictEqual(settings.intensity, "discreet")
+  assert.deepStrictEqual(settings.mutedCategories, ["windows"])
+})
+
+// A malformed value must not leave the toast unanchored or the policy
+// undefined. Falling back is the only behaviour that keeps the plugin usable.
+test("an unrecognised value falls back to the default", () => {
+  const settings = Settings.read({ toastPosition: "middle-of-nowhere", intensity: "screaming" })
+  assert.strictEqual(settings.toastPosition, "bottom-center")
+  assert.strictEqual(settings.intensity, "balanced")
+})
+
+test("a non-array mutedCategories reads as empty", () => {
+  assert.deepStrictEqual(Settings.read({ mutedCategories: "windows" }).mutedCategories, [])
+  assert.deepStrictEqual(Settings.read({ mutedCategories: null }).mutedCategories, [])
+})
+
+test("mutedCategories keeps only strings", () => {
+  assert.deepStrictEqual(Settings.read({ mutedCategories: ["windows", 3, null, "media"] }).mutedCategories, ["windows", "media"])
+})
+
+test("the six toast positions are the supported set", () => {
+  assert.deepStrictEqual(Settings.POSITIONS, [
+    "top-left", "top-center", "top-right",
+    "bottom-left", "bottom-center", "bottom-right"
+  ])
+})
+
+test("toggle adds and removes a category without mutating the input", () => {
+  const before = ["windows"]
+  assert.deepStrictEqual(Settings.toggleCategory(before, "media"), ["windows", "media"])
+  assert.deepStrictEqual(Settings.toggleCategory(before, "windows"), [])
+  assert.deepStrictEqual(before, ["windows"])
+})
+
+// updateEntryInline rewrites the whole entry from what it is given, so the
+// merge has to preserve fields this plugin does not know about.
+test("merge keeps unknown fields on the entry", () => {
+  const merged = Settings.merge({ id: "omakey", record: true }, { intensity: "discreet" })
+  assert.strictEqual(merged.record, true)
+  assert.strictEqual(merged.intensity, "discreet")
+  assert.strictEqual(merged.id, "omakey")
+})

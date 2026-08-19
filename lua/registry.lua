@@ -1,5 +1,5 @@
 -- Scans a Hyprland Lua config and prints every registered binding as TSV:
---   keys \t modmask \t key \t description \t kind \t arg
+--   keys \t modmask \t key \t description \t kind \t arg \t source
 -- Runs the config inside a sandbox where `hl` is a proxy, so nothing reaches
 -- the compositor. Never import this into a live Hyprland VM.
 --
@@ -73,6 +73,22 @@ noop = setmetatable({}, {
   __call = function() return noop end,
 })
 
+-- Which file declared this binding. Every hl.bind call in the real config is
+-- made from helpers.lua, so level 3 is always the wrapper and never the file
+-- the binding belongs to; the first frame past it is the answer. Levels: 1 is
+-- origin itself, 2 is hl.bind, 3 is its caller.
+local function origin()
+  for level = 3, 12 do
+    local info = debug.getinfo(level, "S")
+    if not info then break end
+    local source = tostring(info.source or "")
+    if source:sub(1, 1) == "@" and not source:match("helpers%.lua$") then
+      return (source:gsub("^@", ""))
+    end
+  end
+  return ""
+end
+
 local function clean(value)
   return (tostring(value or ""):gsub("[\t\r\n]", " "))
 end
@@ -91,7 +107,7 @@ hl = setmetatable({
     end
     print(table.concat({
       clean(keys), tostring(modmask), clean(key),
-      clean(opts.description), kind, clean(arg),
+      clean(opts.description), kind, clean(arg), clean(origin()),
     }, "\t"))
     return noop
   end,
