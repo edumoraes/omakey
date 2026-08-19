@@ -442,10 +442,13 @@ whatsoever. Others leave nothing — `omarchy-toggle-nightlight` drives
 `hyprctl hyprsunset` directly and writes no file. Recovering this way needs a
 per-action audit, and it would be a new detector, not a repair of Tier A.
 
-**This needs a decision before Task 11 is planned**: ship without menu coverage,
-add a state-file detector for the subset that leaves traces, or hold the menu
-half until an upstream signal lands (§13, now clearly justified rather than
-merely tidy).
+**Decided 2026-08-19: ship without menu coverage, and pursue the upstream signal
+in parallel.** Tiers B and C now cover the bar, workspaces, panels and windows,
+which is a useful plugin on its own; the menu half returns without a redesign if
+§13's signal lands, because the correlator already accepts a command input. The
+state-file detector is explicitly *not* being built — it would buy 5 or 6 of the
+20 entries at the cost of a new surface coupled to Omarchy's internal state
+paths.
 
 ## 13. Upstream
 
