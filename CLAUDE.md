@@ -209,7 +209,12 @@ re-verify them if a component is upgraded.
 | `qs.Ui` exports `WidgetButton`/`BarIconButton`, and only a registered click target stops a bar click falling through to the bar's own gestures | An unregistered widget lets a double-click reach the bar background and toggle transparency |
 | `qs.Ui/KeyboardPanel` is what the native bar popups are built on | It primes `WlrKeyboardFocus.Exclusive` then settles on `OnDemand`; a hand-rolled layer surface leaves a stationary second click undelivered until the pointer moves |
 | Every `hl.bind` call is made from `helpers.lua` | Attributing a binding to its own file means walking the stack past it, from level 3 |
-| All six bar panels open under one namespace, `omarchy-keyboard-panel`, and all eight menus under `omarchy-menu` | A shared namespace names no binding. `openlayer` must refuse it rather than learn it — otherwise every panel inherits whichever binding fired first |
+| All six bar panels open under one namespace, `omarchy-keyboard-panel`, and all eight menus under `omarchy-menu` | A shared namespace names no binding *on the wire*, and it is still never learned — a learned pairing blames every later click on whichever key fired first |
+| `shell.isPluginOpen(id)` is public and routes bar-widget panels to `bar.isBarWidgetOpen`; the menu's `activeMenu` is a *private* property, reachable only off `shell.panelLoaders` | Sampled when the `openlayer` arrives, those turn the shared namespaces back into an exact binding. Sampled at promotion time instead, the user may already have walked into a submenu |
+| `shell.panelEntries` holds the `panel`/`overlay`/`menu` kinds only — tailscale, weather and the agents picker are `bar-widget` plugins with a panel behind them | The candidate list for the owner sample comes from `pluginRegistry.installedPlugins`, or those three are never asked about and stay unnameable |
+| A binding's command need not name the surface it raises: `omarchy-menu toggle reminder-set` opens `omarchy-reminders`, and `omarchy-agent --pick` opens the agents panel | No seed can pair those. One keypress does, and for a shared namespace it is the sampled owner that is learned, never the namespace |
+| `omarchy-toggle-nightlight`, `omarchy-toggle-idle` and `omarchy-toggle-notification-silencing` emit nothing at all on socket2 | Measured 2026-08-19: five such commands produced one unrelated layer event between them. They are reachable only through a command hook, which is tier A, which does not exist |
+| `omarchy-osd` and `omarchy-notifications` are ambiguous in substance, not on the wire | The OSD rises on a volume change no key caused. No amount of asking produces a key to name, so they stay refused |
 | A panel that declares its own namespace uses the plugin id with dots turned into dashes (`omarchy.clipboard` → `omarchy-clipboard`) | The panel seed resolves those without waiting for a keypress to teach the pairing |
 | `fullscreen>>1` carries the state, never the mode | `mode = "maximized"` cannot be told from `mode = "fullscreen"` on socket2. No mouse path maximises a window, so the gap is theoretical |
 | `activespecial>>special:<name>,<monitor>` on entry, `activespecial>>,<monitor>` on exit | Only entering a special workspace can be attributed to a binding |
@@ -269,9 +274,17 @@ verify against the running shell, then `/simplify` the diff.
 
 ## Upstream
 
-The `Util.execDetached` wrap is the one place omakey reaches into Omarchy's
-internals. An upstream pull request adding a shell-level "command executed"
-signal would let it be deleted. Worth opening in parallel with implementation;
-route it per `contributing.md` — Omarchy lives at
-https://github.com/basecamp/omarchy, and suggestions go to Discussions rather
-than Issues.
+Two things omakey wants that Omarchy does not offer. Route both per
+`contributing.md` — Omarchy lives at https://github.com/basecamp/omarchy, and
+suggestions go to Discussions rather than Issues.
+
+- **A shell-level "command executed" signal.** It would make tier A possible at
+  all. The `Util.execDetached` wrap that was to provide it never shipped: QML
+  refuses the assignment (spec §12.1), so today there is no hook.
+- **A `currentMenu()` method on the menu plugin.** `Service.qml` reads the menu's
+  private `activeMenu` off `shell.panelLoaders["omarchy.menu"].item` — the
+  deepest reach into Omarchy in this repository. It is read-only, and it is the
+  same loader walk the shell itself does for a foreign panel (`shell.qml:817`),
+  raw plugin id and all, rather than the `resolveEnabledId` every other consumer
+  goes through. `shell.callIfLoaded` already returns a string, so one method
+  upstream would turn the walk into a supported call.

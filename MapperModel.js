@@ -23,7 +23,7 @@ function _normalizeLua(expression) {
 
 function seed(bindings) {
   var out = { workspace: {}, close: -1, fullscreen: {}, floatToggle: -1,
-              byCommand: {}, byLua: {}, panel: {}, special: {} }
+              byCommand: {}, byLua: {}, panel: {}, menu: {}, special: {} }
 
   for (var i = 0; i < (bindings || []).length; i++) {
     var binding = bindings[i]
@@ -32,6 +32,14 @@ function seed(bindings) {
       if (!(command in out.byCommand)) out.byCommand[command] = binding.id
       var panel = /^omarchy-shell\s+shell\s+toggle\s+(\S+)$/.exec(command)
       if (panel && !(panel[1] in out.panel)) out.panel[panel[1]] = binding.id
+      // `omarchy-menu toggle` with no argument opens the root menu, which is
+      // also what `omarchy-menu toggle root` opens. First scanned wins, so the
+      // user is told about one key rather than alternately about two.
+      var menu = /^omarchy-menu\s+toggle(?:\s+(\S+))?$/.exec(command)
+      if (menu) {
+        var menuId = menu[1] || "root"
+        if (!(menuId in out.menu)) out.menu[menuId] = binding.id
+      }
       continue
     }
     if (binding.kind !== "lua") continue
@@ -58,25 +66,69 @@ function seed(bindings) {
   return out
 }
 
-// Namespaces that no single binding identifies. Learning one pairs every way in
-// with whichever binding happened to fire first, and every later click then
-// names the wrong key -- verified on 2026-08-19, when clicking the audio widget
-// drew a hint reading SUPER CTRL ALT + D. Silence is the only honest answer.
+// Namespaces that no single binding identifies. The event names the surface,
+// not the thing that opened it, so the namespace alone can only ever be a guess
+// -- verified on 2026-08-19, when clicking the audio widget drew a hint reading
+// SUPER CTRL ALT + D.
+//
+// The value says whether asking the shell can still name an owner, and how. Two
+// of these are ambiguous only on the wire: the shell knows which panel it has
+// open and the menu plugin knows which menu it is showing. The other two are
+// ambiguous in substance -- the OSD rises on a volume change no key caused and
+// a notification arrives on its own -- so there is no key to name however hard
+// we ask, and an empty plan is what says so.
 var AMBIGUOUS_LAYERS = {
   // All six bar panels are built on qs.Ui/KeyboardPanel and share its namespace.
-  "omarchy-keyboard-panel": true,
+  "omarchy-keyboard-panel": { kind: "panel" },
   // Eight bindings open a menu, and every one of them opens this namespace.
-  "omarchy-menu": true,
-  // Volume, brightness and caps all raise the OSD, and so does a change no key
-  // caused.
-  "omarchy-osd": true,
-  // Raised by an arriving notification, never by a binding. Learning it takes
-  // whatever key was pressed nearby and blames every later notification on it.
-  "omarchy-notifications": true
+  "omarchy-menu": { kind: "menu", pluginId: "omarchy.menu", property: "activeMenu" },
+  "omarchy-osd": null,
+  "omarchy-notifications": null
 }
 
 function _isAmbiguousLayer(namespace) {
-  return AMBIGUOUS_LAYERS[String(namespace || "")] === true
+  return String(namespace || "") in AMBIGUOUS_LAYERS
+}
+
+// How to ask the shell who opened this surface, or null when asking is either
+// pointless or not needed. Holding the plan here keeps the QML side to the one
+// thing it is for: making the call.
+function samplingFor(namespace) {
+  return AMBIGUOUS_LAYERS[String(namespace || "")] || null
+}
+
+// A surface no key opens, as opposed to one the mapper simply could not place.
+// The two look identical in a log and only one of them is worth reading.
+function namesNoKey(namespace) {
+  return _isAmbiguousLayer(namespace) && !samplingFor(namespace)
+}
+
+// Which panel is open, given the shell's answer for one id at a time. The
+// candidates are the panels a binding opens plus whatever else the shell can
+// name: a panel no command mentions -- `omarchy-menu toggle reminder-set`
+// raises the reminders panel -- is exactly the one a keypress has to be able to
+// pair, so the walk has to reach it. Whether a key exists for it is resolve()'s
+// question, not this one's. Two open at once names neither.
+//
+// The predicate is injected so the rule stays here rather than in the QML that
+// makes the call.
+function panelOwner(seedMap, knownIds, isOpen) {
+  var candidates = []
+  var id
+  for (id in ((seedMap && seedMap.panel) || {})) candidates.push(id)
+  for (var i = 0; i < (knownIds || []).length; i++) candidates.push(knownIds[i])
+
+  var asked = {}
+  var found = ""
+  for (var j = 0; j < candidates.length; j++) {
+    id = candidates[j]
+    if (asked[id]) continue
+    asked[id] = true
+    if (!isOpen(id)) continue
+    if (found) return ""
+    found = id
+  }
+  return found
 }
 
 function _pluginIdFromNamespace(namespace) {
@@ -129,6 +181,21 @@ function resolve(seedMap, learned, promotion) {
 
   if (effect.name === "openlayer") {
     var namespace = String(args[0] || "")
+    // A sampled namespace answers through whoever the shell said opened it.
+    // Without an owner -- the shell could not say, or nothing sampled it -- the
+    // honest answer is still nothing. Which table applies follows from the
+    // namespace, so the sampler hands back an id and nothing else.
+    var plan = samplingFor(namespace)
+    if (plan) {
+      var owner = effect.owner
+      if (!owner) return null
+      if (plan.kind === "menu") return _hit(seedMap.menu[owner], "menu:" + owner)
+      // Learned first: a panel the user has opened with its key is paired
+      // exactly, where the seed can only know the panels a command names.
+      var learnedPanel = (learned.panel || {})[owner]
+      if (learnedPanel !== undefined) return _hit(learnedPanel, "layer:" + owner)
+      return _hit(seedMap.panel[owner], "layer:" + owner)
+    }
     if (_isAmbiguousLayer(namespace)) return null
     var learnedLayer = (learned.layer || {})[namespace]
     if (learnedLayer !== undefined) return _hit(learnedLayer, "layer:" + namespace)
@@ -146,16 +213,22 @@ function resolve(seedMap, learned, promotion) {
 // covers exec bindings, which no amount of parsing can resolve -- nothing in the
 // string "omarchy-launch-terminal" says which window class it opens.
 function learn(learned, bindingId, effect) {
-  var next = { class: {}, layer: {} }
+  var next = { class: {}, layer: {}, panel: {} }
   var source = learned || {}
   var key
   for (key in (source.class || {})) next.class[key] = source.class[key]
   for (key in (source.layer || {})) {
     if (!_isAmbiguousLayer(key)) next.layer[key] = source.layer[key]
   }
+  for (key in (source.panel || {})) next.panel[key] = source.panel[key]
 
   var args = (effect && effect.args) || []
   if (effect && effect.name === "openwindow" && args[2]) next.class[String(args[2])] = bindingId
+  // The surface they share stays unlearnable; the owner sampled from it does
+  // not. One keypress is what pairs a panel whose command never names it.
+  else if (effect && effect.name === "openlayer" && samplingFor(args[0]) && effect.owner) {
+    next.panel[String(effect.owner)] = bindingId
+  }
   else if (effect && effect.name === "openlayer" && args[0] && !_isAmbiguousLayer(args[0])) {
     next.layer[String(args[0])] = bindingId
   }
@@ -164,4 +237,7 @@ function learn(learned, bindingId, effect) {
   return next
 }
 
-if (typeof module !== "undefined") module.exports = { seed: seed, resolve: resolve, learn: learn }
+if (typeof module !== "undefined") module.exports = {
+  seed: seed, resolve: resolve, learn: learn,
+  samplingFor: samplingFor, panelOwner: panelOwner, namesNoKey: namesNoKey
+}

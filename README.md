@@ -148,6 +148,33 @@ own rather than going missing.
 
 Right-click a hint to mute that action permanently. Left-click dismisses it.
 
+### Menus and bar panels
+
+Every Omarchy menu opens the same layer surface, and so does every bar panel, so
+the compositor event says only "a menu opened" -- not which one. omakey asks the
+shell instead, at the moment the surface appears: which panel it has open, and
+which menu the menu plugin is showing. Clicking the audio widget names
+`SUPER + CTRL + A`, and opening the system menu with the mouse names
+`SUPER + ESCAPE`.
+
+A binding's command does not always name what it opens: `SUPER + CTRL + R` runs
+`omarchy-menu toggle reminder-set` and what appears is the reminders panel, and
+the agents picker works the same way. Nothing omakey can read pairs those in
+advance, so the pairing is learned the first time you use the key -- after that,
+opening the same panel with the mouse names it.
+
+Some things stay silent, and it is not a fault:
+
+- **The OSD and notifications.** The OSD rises on a volume change no key caused
+  and a notification arrives on its own, so there is no key to name.
+- **Panels no key opens.** Clicking the tailscale or weather widget opens a panel
+  that no binding in the config reaches. The log says which panel it was and that
+  nothing is bound to it.
+- **Toggles that change no surface.** Night light, idle locking and notification
+  silencing emit nothing on the compositor's event stream -- there is no effect
+  to notice. Catching those needs a shell-level "command executed" signal, which
+  Omarchy does not offer; see the note on tier A in the design.
+
 ## What it touches
 
 - **Nothing persistent in your configuration.** No edits to `~/.config/hypr/`,
