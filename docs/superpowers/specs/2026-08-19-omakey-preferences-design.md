@@ -3,6 +3,11 @@
 Companion to `2026-08-19-omakey-key-promoter-design.md`. That spec covers how
 omakey decides to speak; this one covers how the user tells it to shut up.
 
+**Amended 2026-08-19**, after the fixed cooldown was replaced by an SM-2
+schedule (§2.1), and after the toast's dwell time became a fourth setting. Where
+this document and the code disagree, the code is what shipped; `README.md`
+describes the shipped behaviour.
+
 Five requirements, in the maintainer's words:
 
 1. A panel on the bar where the plugin's preferences can be configured.
@@ -134,6 +139,14 @@ discreet    quietFirst 6   learnedAfter 3    giveUpAfter 3    cooldownMs 300000
 balanced    quietFirst 3   learnedAfter 5    giveUpAfter 5    cooldownMs 60000
 insistent   quietFirst 1   learnedAfter 8    giveUpAfter 10   cooldownMs 15000
 ```
+
+**As shipped**, two of these four are gone. `learnedAfter` was dropped when
+adoption stopped being a counter and became the SM-2 review, and `cooldownMs`
+became `baseIntervalMs`: no longer a flat wait between hints but I(1), the first
+step of a schedule that grows on every success and collapses on a lapse. The
+numbers are unchanged, so `balanced` still means what it meant; what changed is
+that the interval no longer stays where the preset put it. See
+`PolicyModel.js:PRESETS`.
 
 `balanced` is exactly today's behaviour, so the default changes nothing for an
 existing user. `PolicyModel.defaults()` keeps returning it.

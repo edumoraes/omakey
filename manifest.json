@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omakey",
   "name": "omakey",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Eduardo de Moraes",
   "license": "MIT",
   "description": "Shows the keybinding you could have pressed instead of using the mouse",
