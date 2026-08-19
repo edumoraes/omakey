@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import "CorrelatorModel.js" as CorrelatorModel
 
 // omakey's service half. It owns the units and wires them together; every
 // decision it makes lives in a plain .js model beside it, so the logic is
@@ -60,10 +61,33 @@ Item {
     return entry && (key in entry) ? entry[key] === true : fallback
   }
 
+  // 150 ms is long enough to catch a shadow that arrives after its effect;
+  // 600 ms is the backward window, sized off a measured 309 ms lead for an
+  // exec binding. Spec section 12 question 3 records the measurement.
+  property var correlatorState: CorrelatorModel.createState({ graceMs: 150, shadowMs: 600 })
+
   Ingest {
     id: ingest
     recording: root.settingBool("record", false)
     onRecordingChanged: console.log("omakey: recording", recording ? "on" : "off")
+    onEvent: function (parsed) { CorrelatorModel.ingest(root.correlatorState, parsed) }
+  }
+
+  // A third of the grace window: fine enough that a held effect is never late
+  // by more than a frame, coarse enough to cost nothing.
+  Timer {
+    interval: 50
+    running: true
+    repeat: true
+    onTriggered: {
+      var promotions = CorrelatorModel.flush(root.correlatorState, Date.now())
+      for (var i = 0; i < promotions.length; i++) root.handlePromotion(promotions[i])
+    }
+  }
+
+  function handlePromotion(promotion) {
+    console.log("omakey: promote", promotion.tier,
+      promotion.command || (promotion.effect && promotion.effect.name))
   }
 
   Registry {
