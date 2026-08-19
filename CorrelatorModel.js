@@ -27,7 +27,10 @@ function createState(config) {
     lastCommandAt: -1,
     cursorMovingAt: -1,
     cursorIdleAt: -1,
-    ready: []
+    ready: [],
+    // Effects a shadow explained. Suppressed for promotion, but kept: they are
+    // the only evidence of which binding produces which effect.
+    suppressed: []
   }
 }
 
@@ -59,7 +62,9 @@ function ingest(state, parsed) {
     state.lastShadowId = parseInt(payload, 10)
     // Suppress anything already waiting that this keypress explains.
     state.pending = state.pending.filter(function (item) {
-      return parsed.at - item.effect.at > state.graceMs
+      if (parsed.at - item.effect.at > state.graceMs) return true
+      state.suppressed.push({ bindingId: state.lastShadowId, effect: item.effect })
+      return false
     })
     return
   }
@@ -94,13 +99,23 @@ function flush(state, now) {
   for (var i = 0; i < state.pending.length; i++) {
     var item = state.pending[i]
     if (item.due > now) { keep.push(item); continue }
-    if (_explainedByShadow(state, item.effect)) continue
+    if (_explainedByShadow(state, item.effect)) {
+      state.suppressed.push({ bindingId: state.lastShadowId, effect: item.effect })
+      continue
+    }
     out.push({ tier: item.tier, effect: item.effect, command: null, at: item.effect.at })
   }
   state.pending = keep
   return out
 }
 
+function drainSuppressions(state) {
+  var out = state.suppressed
+  state.suppressed = []
+  return out
+}
+
 if (typeof module !== "undefined") module.exports = {
-  EFFECTS: EFFECTS, createState: createState, ingest: ingest, command: command, flush: flush
+  EFFECTS: EFFECTS, createState: createState, ingest: ingest, command: command,
+  flush: flush, drainSuppressions: drainSuppressions
 }

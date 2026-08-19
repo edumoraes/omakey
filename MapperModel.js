@@ -100,4 +100,23 @@ function resolve(seedMap, learned, promotion) {
   return null
 }
 
-if (typeof module !== "undefined") module.exports = { seed: seed, resolve: resolve }
+// Called when a shadow and an effect arrive together: the keyboard did this, so
+// the binding that fired is the binding that produces this effect. This is what
+// covers exec bindings, which no amount of parsing can resolve -- nothing in the
+// string "omarchy-launch-terminal" says which window class it opens.
+function learn(learned, bindingId, effect) {
+  var next = { class: {}, layer: {} }
+  var source = learned || {}
+  var key
+  for (key in (source.class || {})) next.class[key] = source.class[key]
+  for (key in (source.layer || {})) next.layer[key] = source.layer[key]
+
+  var args = (effect && effect.args) || []
+  if (effect && effect.name === "openwindow" && args[2]) next.class[String(args[2])] = bindingId
+  else if (effect && effect.name === "openlayer" && args[0]) next.layer[String(args[0])] = bindingId
+  else return source
+
+  return next
+}
+
+if (typeof module !== "undefined") module.exports = { seed: seed, resolve: resolve, learn: learn }

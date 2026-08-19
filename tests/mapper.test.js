@@ -103,3 +103,24 @@ test("strips the uwsm-app launcher prefix when seeding a command", () => {
   const seed = Mapper.seed([{ id: 0, kind: "exec", arg: "uwsm-app -- omawrite" }])
   assert.strictEqual(seed.byCommand["omawrite"], 0)
 })
+
+test("learns a window class from a shadowed open", () => {
+  const learned = Mapper.learn({}, 2, { name: "openwindow", args: ["0x1", "1", "Alacritty", "term"] })
+  assert.strictEqual(learned.class["Alacritty"], 2)
+})
+
+test("learns a layer namespace from a shadowed open", () => {
+  const learned = Mapper.learn({}, 3, { name: "openlayer", args: ["omarchy-audio"] })
+  assert.strictEqual(learned.layer["omarchy-audio"], 3)
+})
+
+test("learning does not mutate the input", () => {
+  const before = {}
+  Mapper.learn(before, 2, { name: "openwindow", args: ["0x1", "1", "Alacritty", "t"] })
+  assert.deepStrictEqual(before, {})
+})
+
+test("ignores effects that carry no learnable identity", () => {
+  const learned = Mapper.learn({}, 2, { name: "closewindow", args: ["0x1"] })
+  assert.deepStrictEqual(learned, {})
+})

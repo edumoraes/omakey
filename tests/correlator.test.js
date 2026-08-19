@@ -155,3 +155,38 @@ test("the recorded keyboard menu open is the case a symmetric window loses", () 
   assert.strictEqual(leaked.length, 1, "a 150 ms symmetric window promotes the keyboard open")
   assert.strictEqual(replay(SPLIT).filter(p => p.effect.at === 1787161710401).length, 0)
 })
+
+// A suppressed effect is the one case where being suppressed is still useful:
+// the keyboard caused it, so the binding that fired is the binding that
+// produces this effect. That is the only way an exec binding is ever mapped.
+test("an effect suppressed by a leading shadow is reported as a lesson", () => {
+  const state = Correlator.createState(SPLIT)
+  Correlator.ingest(state, shadow(139, 1000))
+  const opened = effect("openlayer", ["omarchy-menu"], 1309)
+  Correlator.ingest(state, opened)
+  Correlator.flush(state, 1600)
+  assert.deepStrictEqual(Correlator.drainSuppressions(state), [{ bindingId: 139, effect: opened }])
+})
+
+test("an effect suppressed by a trailing shadow is reported too", () => {
+  const state = Correlator.createState(CONFIG)
+  const opened = effect("openwindow", ["0x1", "1", "Alacritty", "term"], 1000)
+  Correlator.ingest(state, opened)
+  Correlator.ingest(state, shadow(7, 1005))
+  assert.deepStrictEqual(Correlator.drainSuppressions(state), [{ bindingId: 7, effect: opened }])
+})
+
+test("draining clears the lessons", () => {
+  const state = Correlator.createState(CONFIG)
+  Correlator.ingest(state, effect("openwindow", ["0x1", "1", "A", "t"], 1000))
+  Correlator.ingest(state, shadow(7, 1005))
+  Correlator.drainSuppressions(state)
+  assert.deepStrictEqual(Correlator.drainSuppressions(state), [])
+})
+
+test("a promoted effect produces no lesson", () => {
+  const state = Correlator.createState(CONFIG)
+  Correlator.ingest(state, effect("workspacev2", ["3", "3"], 1000))
+  Correlator.flush(state, 1200)
+  assert.deepStrictEqual(Correlator.drainSuppressions(state), [])
+})

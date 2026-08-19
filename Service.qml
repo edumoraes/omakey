@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import "CorrelatorModel.js" as CorrelatorModel
+import "MapperModel.js" as MapperModel
 
 // omakey's service half. It owns the units and wires them together; every
 // decision it makes lives in a plain .js model beside it, so the logic is
@@ -70,7 +71,14 @@ Item {
     id: ingest
     recording: root.settingBool("record", false)
     onRecordingChanged: console.log("omakey: recording", recording ? "on" : "off")
-    onEvent: function (parsed) { CorrelatorModel.ingest(root.correlatorState, parsed) }
+    // Until the shadows are live, no keypress can announce itself, so every
+    // effect looks manual -- including the shell's own layer surfaces coming up
+    // at startup. Spec section 9: a detector that cannot be trusted says
+    // nothing rather than guessing.
+    onEvent: function (parsed) {
+      if (!injector.injected) return
+      CorrelatorModel.ingest(root.correlatorState, parsed)
+    }
   }
 
   // A third of the grace window: fine enough that a held effect is never late
@@ -82,6 +90,9 @@ Item {
     onTriggered: {
       var promotions = CorrelatorModel.flush(root.correlatorState, Date.now())
       for (var i = 0; i < promotions.length; i++) root.handlePromotion(promotions[i])
+
+      var lessons = CorrelatorModel.drainSuppressions(root.correlatorState)
+      for (var j = 0; j < lessons.length; j++) root.handleLesson(lessons[j])
     }
   }
 
@@ -89,6 +100,20 @@ Item {
     console.log("omakey: promote", promotion.tier,
       promotion.command || (promotion.effect && promotion.effect.name))
   }
+
+  // A shadow and an effect arriving together means the keyboard did this, so
+  // the binding that fired is the binding that produces this effect. It is the
+  // only signal that ever maps an exec binding.
+  function handleLesson(lesson) {
+    var current = store.learned || {}
+    var next = MapperModel.learn(current, lesson.bindingId, lesson.effect)
+    if (next === current) return
+    store.learned = next
+    store.scheduleSave()
+    console.log("omakey: learned", lesson.effect.name, "->", lesson.bindingId)
+  }
+
+  Store { id: store }
 
   Registry {
     id: registry
