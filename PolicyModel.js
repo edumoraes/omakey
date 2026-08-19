@@ -69,6 +69,18 @@ function mute(stats, key) {
   return _with(stats || {}, key, entry)
 }
 
+// Spec section 9. Without shadow bindings there is no way to tell a keypress
+// from a click, so every effect looks manual. Losing that hook must disable
+// effect-based promotion entirely rather than degrade into guessing.
+function tiersEnabled(capabilities) {
+  var registry = !!(capabilities && capabilities.registry)
+  return {
+    effects: registry && !!capabilities.shadows,
+    commands: registry && !!capabilities.commands
+  }
+}
+
 if (typeof module !== "undefined") module.exports = {
-  defaults: defaults, recordManual: recordManual, recordBind: recordBind, mute: mute
+  defaults: defaults, recordManual: recordManual, recordBind: recordBind,
+  mute: mute, tiersEnabled: tiersEnabled
 }

@@ -81,6 +81,25 @@ Item {
   // Effect-to-binding seed, rebuilt whenever the registry is rescanned.
   property var seed: ({})
 
+  // What is actually live right now. `commands` is permanently false on this
+  // platform: QML refuses to reassign Util.execDetached, so there is no
+  // in-process hook for menu and bar commands. Spec section 12 question 1.
+  readonly property var capabilities: ({
+    registry: registry.bindings.length > 0,
+    shadows: injector.injected,
+    commands: false
+  })
+
+  readonly property var tiers: PolicyModel.tiersEnabled(root.capabilities)
+
+  // One line a bug reporter can paste that explains what was actually live.
+  // The tiers are recomputed here rather than read off root.tiers: that binding
+  // has not necessarily re-evaluated by the time this handler runs, and a line
+  // pairing fresh capabilities with stale tiers is worse than no line at all.
+  onCapabilitiesChanged: console.log("omakey: capabilities",
+    JSON.stringify(root.capabilities),
+    "tiers", JSON.stringify(PolicyModel.tiersEnabled(root.capabilities)))
+
   // 150 ms is long enough to catch a shadow that arrives after its effect;
   // 600 ms is the backward window, sized off a measured 309 ms lead for an
   // exec binding. Spec section 12 question 3 records the measurement.
@@ -123,6 +142,9 @@ Item {
   }
 
   function handlePromotion(promotion) {
+    var allowed = promotion.tier === "A" ? root.tiers.commands : root.tiers.effects
+    if (!allowed) return
+
     var hit = MapperModel.resolve(root.seed, store.learned || {}, promotion)
     if (!hit) return
 
