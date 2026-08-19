@@ -111,3 +111,40 @@ test("a non-boolean hintsEnabled does not silence the plugin by accident", () =>
   assert.strictEqual(Settings.read({ hintsEnabled: "false" }).hintsEnabled, true)
   assert.strictEqual(Settings.read({ hintsEnabled: null }).hintsEnabled, true)
 })
+
+// The dwell time ships as four stops rather than a free number: a hint that
+// lingers for 37 seconds is a bug the user built for themselves.
+test("the default dwell time is the second stop", () => {
+  assert.strictEqual(Settings.read(null).toastDuration, 4000)
+  assert.strictEqual(Settings.DURATIONS[1], 4000)
+})
+
+test("a valid stop is carried through", () => {
+  assert.strictEqual(Settings.read({ id: "omakey", toastDuration: 7000 }).toastDuration, 7000)
+})
+
+test("a dwell time off the stops falls back rather than reaching the timer", () => {
+  assert.strictEqual(Settings.read({ toastDuration: 3333 }).toastDuration, 4000)
+  assert.strictEqual(Settings.read({ toastDuration: "long" }).toastDuration, 4000)
+  assert.strictEqual(Settings.read({ toastDuration: null }).toastDuration, 4000)
+  assert.strictEqual(Settings.read({ toastDuration: 0 }).toastDuration, 4000)
+})
+
+test("the slider position follows the stored value", () => {
+  assert.strictEqual(Settings.durationIndex(2000), 0)
+  assert.strictEqual(Settings.durationIndex(4000), 1)
+  assert.strictEqual(Settings.durationIndex(10000), 3)
+  // An unknown value puts the knob on the default rather than off the track.
+  assert.strictEqual(Settings.durationIndex(3333), 1)
+})
+
+test("the dwell time reads as seconds", () => {
+  assert.strictEqual(Settings.durationLabel(2000), "2s")
+  assert.strictEqual(Settings.durationLabel(10000), "10s")
+})
+
+test("changing the dwell time keeps a field this version does not know", () => {
+  const merged = Settings.merge({ id: "omakey", record: true }, { toastDuration: 7000 })
+  assert.strictEqual(merged.record, true)
+  assert.strictEqual(merged.toastDuration, 7000)
+})

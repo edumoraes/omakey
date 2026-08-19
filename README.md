@@ -80,6 +80,7 @@ in `bar.layout` when the button is on the bar and in `plugins[]` otherwise:
 | `hintsEnabled` | `true` | The master switch. Turn it off and omakey stays silent without forgetting anything it has learned. |
 | `toastPosition` | `bottom-center` | Which corner or edge the hint appears at: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`. |
 | `intensity` | `balanced` | How readily omakey speaks. See below. |
+| `toastDuration` | `4000` | How long the hint stays up, in milliseconds. Four stops: `2000`, `4000`, `7000`, `10000`. |
 | `mutedCategories` | `[]` | Categories omakey stays quiet about. |
 | `cursorIdleMs` | `800` | How recently the cursor must have moved for a window close to count as a mouse action. |
 | `record` | `false` | Development aid: writes every IPC event to `~/.local/state/omakey/stream.jsonl`. |

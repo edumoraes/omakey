@@ -53,6 +53,7 @@ BarWidget {
 
   function setPosition(position) { root.persist({ toastPosition: position }) }
   function setIntensity(intensity) { root.persist({ intensity: intensity }) }
+  function setDuration(duration) { root.persist({ toastDuration: duration }) }
   function setHintsEnabled(value) { root.persist({ hintsEnabled: value }) }
   function toggleCategory(categoryId) {
     root.persist({ mutedCategories: SettingsModel.toggleCategory(root.current.mutedCategories, categoryId) })
@@ -205,6 +206,47 @@ BarWidget {
               selected: root.current.intensity === modelData
               onPicked: root.setIntensity(modelData)
             }
+          }
+        }
+
+        SectionLabel { text: "How long it stays"; opacity: root.current.hintsEnabled ? 0.6 : 0.3 }
+
+        Item {
+          width: layout.width
+          implicitHeight: Math.max(dwell.implicitHeight, dwellLabel.implicitHeight)
+
+          // qs.Ui's own slider, index-based and notched, exactly as the display
+          // panel drives its text-size stops (panels/monitor/Panel.qml:699).
+          PanelSlider {
+            id: dwell
+            bar: root.bar
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.right: dwellLabel.left
+            anchors.rightMargin: Style.space(10)
+            minimum: 0
+            maximum: SettingsModel.DURATIONS.length - 1
+            step: 1
+            integer: true
+            tickCount: SettingsModel.DURATIONS.length
+            value: SettingsModel.durationIndex(root.current.toastDuration)
+            // Released, not moved: a drag emits a sample per pointer event, and
+            // each one here would be a rewrite of shell.json. liveValue keeps
+            // the knob under the cursor in the meantime.
+            onReleased: function (position) { root.setDuration(SettingsModel.DURATIONS[Math.round(position)]) }
+          }
+
+          Text {
+            id: dwellLabel
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            text: SettingsModel.durationLabel(dwell.dragging
+              ? SettingsModel.DURATIONS[Math.round(dwell.liveValue)]
+              : root.current.toastDuration)
+            color: Color.popups.text
+            opacity: 0.7
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
           }
         }
 
