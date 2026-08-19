@@ -1,9 +1,12 @@
 # omakey — a Key Promoter for Omarchy
 
-**Status:** approved; plan Task 1 executed, Tasks 2-12 outstanding
+**Status:** approved and implemented; all twelve plan tasks executed and
+verified against the running desktop
 **Date:** 2026-08-19
 **Target:** Omarchy 4.0.0.alpha, Hyprland 0.56.2
-**Amended:** 2026-08-19 — §12 questions 1 and 2 answered, §12.1 added and decided
+**Amended:** 2026-08-19 — §12 questions 1, 2 and 3 answered, §12.1 added and
+decided; §12 Q3 now also records the measured 309 ms shadow lead and the split
+grace window it forced
 
 ## 1. What it is
 

@@ -7,18 +7,30 @@
 
 ## Status
 
-**Designed, planned, and one task in.** The two documents come first:
+**All twelve plan tasks are implemented and verified against the running
+desktop.** The two documents still come first:
 
 - `docs/superpowers/specs/2026-08-19-omakey-key-promoter-design.md` — the design,
   including every platform fact that was verified rather than assumed.
 - `docs/superpowers/plans/2026-08-19-omakey.md` — twelve tasks, each ending in a
-  tested, committable deliverable.
+  tested, committable deliverable. The plan is a historical record now; where it
+  disagrees with the code, the code won and the commit message says why.
 
-Task 1 is done: `manifest.json` and a `Service.qml` that exists only to probe
-whether `Util.execDetached` can be wrapped. **It cannot** — see spec §12 and
-§12.1, which also work out what that costs and the product decision it leaves
-open. Nothing else in the architecture map below exists yet; do not assume it
-does.
+Everything in the architecture map below exists, except `CommandHook.qml`, which
+was cancelled: `Util.execDetached` cannot be wrapped (spec §12, §12.1). Tier A
+is permanently unavailable and `capabilities.commands` is hardcoded false.
+
+What the plan got wrong, and the measurements that corrected it:
+
+| Plan said | Reality |
+|-----------|---------|
+| `graceMs: 150`, symmetric | The shadow *leads* its effect by up to 309 ms for an `exec` binding. The window is split: hold `graceMs`, look back `shadowMs` (600). Spec §12 Q3 |
+| `hl.timer(interval, callback)` | `hl.timer(callback, { timeout = <ms>, type = "repeat"\|"oneshot" })` |
+| `hyprctl eval <lua>` | `hyprctl eval -- <lua>`; a payload starting with `--` is read as a flag |
+| `shell.pluginSettings(id)` | Does not exist. Settings are inline fields on the plugin's entry in `shell.json`'s `plugins[]` |
+| `shell.callIfLoaded` for the toast's mute | Routes to *panel* loaders — it would call back into the toast. A panel declaring `property var service` is handed its own service |
+| Geometry from `Hyprland.toplevels` | No type information ships for it; `hyprctl clients -j` is the documented contract |
+| A shadow probe fired six times | One keypress fires its shadow exactly once; it was six presses |
 
 Read the spec before the plan, and both before writing code.
 
