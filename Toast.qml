@@ -17,7 +17,11 @@ Item {
   property string combo: ""
   property string description: ""
   property string actionKey: ""
+  property string position: "bottom-center"
   property int duration: 4000
+
+  readonly property bool atTop: root.position.indexOf("top-") === 0
+  readonly property string side: root.position.replace(/^(top|bottom)-/, "")
 
   readonly property int pad: Style.space(16)
 
@@ -27,6 +31,9 @@ Item {
     root.combo = String(payload.combo || "")
     root.description = String(payload.description || "")
     root.actionKey = String(payload.actionKey || "")
+    // The service normalises this through SettingsModel, so an unrecognised
+    // value never reaches here; the guard is for a payload from anywhere else.
+    root.position = String(payload.position || "bottom-center")
     if (!root.combo) return
     root.opened = true
     hideTimer.restart()
@@ -64,9 +71,15 @@ Item {
     Rectangle {
       id: card
 
-      anchors.horizontalCenter: parent.horizontalCenter
-      anchors.bottom: parent.bottom
-      anchors.bottomMargin: Style.space(67)
+      // Anchoring is set rather than bound because only one of each axis pair
+      // may be active at a time: leaving a stale `top` set while assigning
+      // `bottom` stretches the card across the screen.
+      anchors.top: root.atTop ? parent.top : undefined
+      anchors.bottom: root.atTop ? undefined : parent.bottom
+      anchors.left: root.side === "left" ? parent.left : undefined
+      anchors.right: root.side === "right" ? parent.right : undefined
+      anchors.horizontalCenter: root.side === "center" ? parent.horizontalCenter : undefined
+      anchors.margins: Style.space(67)
 
       radius: Style.cornerRadius
       color: Color.popups.background

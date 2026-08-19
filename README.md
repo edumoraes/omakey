@@ -26,6 +26,26 @@ would have been faster.
 omarchy plugin add https://github.com/edumoraes/omakey.git --enable
 ```
 
+Run it without `--yes`. Omarchy asks which bar section the omakey button should
+go in, and that prompt is skipped for a non-interactive install. To place it
+later, or to move it:
+
+```bash
+omarchy plugin enable omakey --section right --before omarchy.tray
+omarchy bar move omakey --section left
+```
+
+**Upgrading from 0.1.x.** omakey used to be a service and panel only, so its
+shell.json entry sits in `plugins[]` rather than in the bar layout. Omarchy
+adds a widget to the bar only when the plugin has no entry at all, so enabling
+it on top of the old one does nothing -- and reports `Enabled and moved omakey`
+while doing it. Disable first:
+
+```bash
+omarchy plugin disable omakey
+omarchy plugin enable omakey --section right
+```
+
 ## Uninstall
 
 ```bash
@@ -39,20 +59,55 @@ so reloading always returns Hyprland to exactly what your own config says.
 
 ## Settings
 
-Settings are inline fields on omakey's entry in `~/.config/omarchy/shell.json`:
+Click the omakey button on the bar. It opens a panel with everything below --
+where hints appear, how much omakey speaks, and which categories it speaks
+about.
+
+Everything is stored as inline fields on omakey's entry in
+`~/.config/omarchy/shell.json`, so it can also be edited by hand. The entry is
+in `bar.layout` when the button is on the bar and in `plugins[]` otherwise:
 
 ```json
-{ "plugins": [ { "id": "omakey", "quietFirst": 3, "cooldownMs": 60000 } ] }
+{ "id": "omakey", "toastPosition": "bottom-right", "intensity": "discreet" }
 ```
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `quietFirst` | `3` | How many times you may do something with the mouse before omakey says anything about it. |
-| `cooldownMs` | `60000` | Minimum gap between two hints for the *same* action. |
-| `learnedAfter` | `5` | Once you have used a binding this many times, omakey stops mentioning it. |
-| `giveUpAfter` | `5` | A hint shown this many times and never adopted mutes itself for good. |
+| `toastPosition` | `bottom-center` | Which corner or edge the hint appears at: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`. |
+| `intensity` | `balanced` | How readily omakey speaks. See below. |
+| `mutedCategories` | `[]` | Categories omakey stays quiet about. |
 | `cursorIdleMs` | `800` | How recently the cursor must have moved for a window close to count as a mouse action. |
 | `record` | `false` | Development aid: writes every IPC event to `~/.local/state/omakey/stream.jsonl`. |
+
+### Intensity
+
+One setting instead of four counters, because in practice they move together.
+
+| | Silent for the first | Repeats no sooner than | Considers it learned after | Gives up after |
+| --- | --- | --- | --- | --- |
+| `discreet` | 6 uses | 5 minutes | 3 uses | 3 ignored hints |
+| `balanced` | 3 uses | 1 minute | 5 uses | 5 ignored hints |
+| `insistent` | 1 use | 15 seconds | 8 uses | 10 ignored hints |
+
+`balanced` is what omakey has always done.
+
+### Categories
+
+omakey groups your keybindings by the file that declares them, so the list
+reflects your actual configuration rather than a fixed table. On a stock
+Omarchy install that is:
+
+| Category | Bindings |
+| --- | --- |
+| Windows | 100 |
+| System | 72 |
+| Media | 28 |
+| Applications | 28 |
+
+Turning a category off silences its hints without affecting anything else --
+and without spending its counters, so turning it back on starts from where it
+left off. A bindings file omakey does not recognise becomes a category of its
+own rather than going missing.
 
 Right-click a hint to mute that action permanently. Left-click dismisses it.
 
@@ -62,8 +117,11 @@ Right-click a hint to mute that action permanently. Left-click dismisses it.
   no shell profile hooks, no `PATH` changes. Its bindings are injected at
   runtime and disappear on reload.
 - **One state file**, `~/.local/state/omakey/stats.json`, holding what omakey
-  has learned and the counters that let hints fade once you have picked a
-  shortcut up. Delete it to start over.
+  has learned, the counters that let hints fade once you have picked a shortcut
+  up, and the category list the settings panel reads. Delete it to start over.
+- **Your preferences**, on omakey's own entry in
+  `~/.config/omarchy/shell.json`. That file is Omarchy's, and omakey only ever
+  writes its own entry, through the shell's own API.
 - Your keybinding count in `hyprctl binds` roughly doubles while omakey is
   running — 228 becomes 456 on a default install. That is expected: those are
   the invisible companion bindings. They carry no description, so

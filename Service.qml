@@ -2,10 +2,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import "CategoryModel.js" as CategoryModel
 import "CorrelatorModel.js" as CorrelatorModel
 import "MapperModel.js" as MapperModel
 import "PolicyModel.js" as PolicyModel
 import "RegistryModel.js" as RegistryModel
+import "SettingsModel.js" as SettingsModel
 
 // omakey's service half. It owns the units and wires them together; every
 // decision it makes lives in a plain .js model beside it, so the logic is
@@ -49,15 +51,22 @@ Item {
   }
 
   // The shell exposes no per-plugin settings accessor. Settings are inline
-  // fields on the plugin's own entry in shell.json's plugins[] array -- see
-  // "Storage rules" in /usr/share/omarchy/shell/README.md.
+  // fields on the plugin's own entry in shell.json -- see "Storage rules" in
+  // /usr/share/omarchy/shell/README.md.
+  //
+  // That entry is in bar.layout when omakey is on the bar and in plugins[]
+  // otherwise, never both: PluginRegistry.findEntryLocation searches them in
+  // that order and returns one location. The precedence has to match, because
+  // shell.updateEntryInline -- the write path the panel uses -- picks the entry
+  // the same way.
   function settingsEntry() {
     var config = root.shell && root.shell.shellConfig ? root.shell.shellConfig : null
-    var entries = config && Array.isArray(config.plugins) ? config.plugins : []
-    for (var i = 0; i < entries.length; i++) {
-      if (entries[i] && String(entries[i].id) === "omakey") return entries[i]
-    }
-    return null
+    return SettingsModel.resolveEntry(config, "omakey")
+  }
+
+  readonly property var settings: {
+    var config = root.shell && root.shell.shellConfig ? root.shell.shellConfig : null
+    return SettingsModel.read(SettingsModel.resolveEntry(config, "omakey"))
   }
 
   function settingBool(key, fallback) {
@@ -71,12 +80,7 @@ Item {
     return isFinite(value) ? value : fallback
   }
 
-  readonly property var policyConfig: ({
-    quietFirst: root.settingInt("quietFirst", 3),
-    learnedAfter: root.settingInt("learnedAfter", 5),
-    giveUpAfter: root.settingInt("giveUpAfter", 5),
-    cooldownMs: root.settingInt("cooldownMs", 60000)
-  })
+  readonly property var policyConfig: PolicyModel.configFor(root.settings.intensity)
 
   // Effect-to-binding seed, rebuilt whenever the registry is rescanned.
   property var seed: ({})
@@ -96,6 +100,9 @@ Item {
   // The tiers are recomputed here rather than read off root.tiers: that binding
   // has not necessarily re-evaluated by the time this handler runs, and a line
   // pairing fresh capabilities with stale tiers is worse than no line at all.
+  onSettingsChanged: console.log("omakey: settings", JSON.stringify(root.settings),
+    "from", root.settingsEntry() ? "shell.json entry" : "defaults")
+
   onCapabilitiesChanged: console.log("omakey: capabilities",
     JSON.stringify(root.capabilities),
     "tiers", JSON.stringify(PolicyModel.tiersEnabled(root.capabilities)))
@@ -148,6 +155,15 @@ Item {
     var hit = MapperModel.resolve(root.seed, store.learned || {}, promotion)
     if (!hit) return
 
+    // The category gate sits ahead of recordManual on purpose. A muted category
+    // must not burn its quiet-start budget, advance hintCount, or trip
+    // self-demotion -- otherwise unmuting it later would find the counters
+    // already spent and it would stay silent anyway. Silence has to be free.
+    if (root.categoryMuted(hit.bindingId)) {
+      console.log("omakey: silent", hit.actionKey, "category-muted")
+      return
+    }
+
     var result = PolicyModel.recordManual(store.stats || {}, hit.actionKey, Date.now(), root.policyConfig)
     store.stats = result.stats
     store.scheduleSave()
@@ -157,6 +173,12 @@ Item {
       return
     }
     root.showHint(hit)
+  }
+
+  function categoryMuted(bindingId) {
+    var binding = registry.bindings[bindingId]
+    if (!binding) return false
+    return CategoryModel.isMuted(root.settings.mutedCategories, CategoryModel.categoryOf(binding))
   }
 
   function showHint(hit) {
@@ -169,7 +191,8 @@ Item {
     root.shell.summon("omakey", JSON.stringify({
       combo: combo,
       description: binding.description || "",
-      actionKey: hit.actionKey
+      actionKey: hit.actionKey,
+      position: root.settings.toastPosition
     }))
   }
 
@@ -237,6 +260,12 @@ Item {
     onLoaded: function (bindings) {
       console.log("omakey: registry loaded", bindings.length, "bindings")
       root.seed = MapperModel.seed(bindings)
+      // The preferences widget needs the category list, and a bar widget is
+      // handed only bar/moduleName/settings -- never the service. So the
+      // service publishes it through the state file the Store already writes,
+      // which keeps omakey down to one file outside its own directory.
+      store.categories = CategoryModel.summarize(bindings)
+      store.scheduleSave()
       injector.apply(bindings)
     }
     onFailed: function (reason) { console.warn("omakey: registry failed:", reason) }
