@@ -2,7 +2,7 @@ const { test } = require("node:test")
 const assert = require("node:assert")
 const Policy = require("../PolicyModel.js")
 
-const CONFIG = { quietFirst: 3, learnedAfter: 5, giveUpAfter: 5, cooldownMs: 60000 }
+const CONFIG = { quietFirst: 3, giveUpAfter: 5, baseIntervalMs: 60000 }
 
 function manualTimes(count, startAt) {
   let stats = {}
@@ -25,19 +25,22 @@ test("shows on the occurrence after quietFirst", () => {
   assert.strictEqual(last.show, true)
 })
 
-test("respects the cooldown between hints for the same action", () => {
+test("stays quiet until the action comes due again", () => {
   let { stats } = manualTimes(4)
   const soon = Policy.recordManual(stats, "close", 3 * 120000 + 1000, CONFIG)
   assert.strictEqual(soon.show, false)
-  assert.strictEqual(soon.reason, "cooldown")
+  assert.strictEqual(soon.reason, "scheduled")
 })
 
-test("stops once the user has used the binding learnedAfter times", () => {
+// Adoption used to silence an action for good once it crossed a counter. It is
+// the schedule that decides now, and the schedule never quite stops -- but a
+// handful of successes already push the next reminder past any single sitting.
+test("using the binding pushes the next reminder well past the first step", () => {
   let { stats } = manualTimes(4)
-  for (let i = 0; i < 5; i++) stats = Policy.recordBind(stats, "close", 900000 + i)
+  for (let i = 0; i < 5; i++) stats = Policy.recordBind(stats, "close", 900000 + i, CONFIG)
   const after = Policy.recordManual(stats, "close", 2000000, CONFIG)
   assert.strictEqual(after.show, false)
-  assert.strictEqual(after.reason, "learned")
+  assert.strictEqual(after.reason, "scheduled")
 })
 
 test("self-demotes after giveUpAfter hints with no adoption", () => {
@@ -54,7 +57,7 @@ test("self-demotes after giveUpAfter hints with no adoption", () => {
 
 test("adopting the binding once resets the give-up counter", () => {
   let { stats } = manualTimes(4)
-  stats = Policy.recordBind(stats, "close", 500000)
+  stats = Policy.recordBind(stats, "close", 500000, CONFIG)
   assert.strictEqual(stats.close.hintCount, 0)
 })
 

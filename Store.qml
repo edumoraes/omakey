@@ -17,6 +17,13 @@ Item {
 
   property var learned: ({})
   property var stats: ({})
+  // The reset the service has already carried out. It is compared against the
+  // stamp the panel writes into shell.json, so the file has to remember it or
+  // every restart would forget the learning again.
+  property real resetAt: 0
+  // Nothing may be reset before the file has been read: an early reset would
+  // race the load and be overwritten by it.
+  property bool loaded: false
   // Published by the service for the preferences widget to read. It is derived
   // state, rebuilt on every scan, and a reader that ignores it is unaffected --
   // which is why it does not bump the file version.
@@ -29,6 +36,7 @@ Item {
         root.learned = parsed.learned || {}
         root.stats = parsed.stats || {}
         if (Array.isArray(parsed.categories)) root.categories = parsed.categories
+        root.resetAt = Number(parsed.resetAt) || 0
       }
     } catch (error) {
       // A corrupt or absent file is not an error: start from defaults.
@@ -36,11 +44,17 @@ Item {
   }
 
   function save() {
+    // An immediate save answers whatever the debounce was about to write, so
+    // the timer is disarmed rather than left to rewrite the same bytes two
+    // seconds later. Keeping that knowledge here is what lets a caller ask for
+    // a write without knowing the write policy.
+    debounce.stop()
     file.setText(JSON.stringify({
       version: 1,
       learned: root.learned,
       stats: root.stats,
-      categories: root.categories
+      categories: root.categories,
+      resetAt: root.resetAt
     }, null, 2) + "\n")
   }
 
@@ -54,8 +68,8 @@ Item {
     watchChanges: false
     atomicWrites: true
     printErrors: false
-    onLoaded: root.adopt(text())
-    onLoadFailed: root.adopt("")
+    onLoaded: { root.adopt(text()); root.loaded = true }
+    onLoadFailed: { root.adopt(""); root.loaded = true }
   }
 
   Timer {

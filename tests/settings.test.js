@@ -148,3 +148,15 @@ test("changing the dwell time keeps a field this version does not know", () => {
   assert.strictEqual(merged.record, true)
   assert.strictEqual(merged.toastDuration, 7000)
 })
+
+// The panel cannot reach the service -- a bar widget is handed bar/moduleName/
+// settings and nothing else -- so the reset button travels as a timestamp on
+// the shared shell.json entry. The service applies it once and remembers it.
+test("resetAt is carried through as a number", () => {
+  assert.strictEqual(Settings.read({ id: "omakey", resetAt: 1723000000000 }).resetAt, 1723000000000)
+})
+
+test("an absent or unusable resetAt reads as never reset", () => {
+  assert.strictEqual(Settings.read(null).resetAt, 0)
+  assert.strictEqual(Settings.read({ id: "omakey", resetAt: "yesterday" }).resetAt, 0)
+})

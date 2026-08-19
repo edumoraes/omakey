@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "CategoryModel.js" as CategoryModel
+import "PolicyModel.js" as PolicyModel
 import "SettingsModel.js" as SettingsModel
 
 // omakey's preferences surface. Named Widget.qml rather than BarWidget.qml
@@ -34,6 +35,9 @@ BarWidget {
   // settings and never the service, so the service publishes them through the
   // state file instead.
   property var categories: []
+  // How many actions omakey is scheduling right now. It is what the reset
+  // button is offering to discard, so the panel says it before asking.
+  property int tracked: 0
 
   readonly property int gap: Style.space(8)
 
@@ -55,6 +59,12 @@ BarWidget {
   function setIntensity(intensity) { root.persist({ intensity: intensity }) }
   function setDuration(duration) { root.persist({ toastDuration: duration }) }
   function setHintsEnabled(value) { root.persist({ hintsEnabled: value }) }
+  // The reset travels as a timestamp on the shared shell.json entry: a bar
+  // widget is never handed the service, and the state file belongs to the
+  // service, which debounces its own writes -- clearing it from here would race
+  // that. The service watches for the stamp and does the clearing itself.
+  function resetLearning() { root.persist({ resetAt: Date.now() }) }
+
   function toggleCategory(categoryId) {
     root.persist({ mutedCategories: SettingsModel.toggleCategory(root.current.mutedCategories, categoryId) })
   }
@@ -97,15 +107,17 @@ BarWidget {
     printErrors: false
     onLoaded: root.adoptState(text())
     onFileChanged: reload()
-    onLoadFailed: root.categories = []
+    onLoadFailed: root.adoptState("")
   }
 
   function adoptState(payload) {
     try {
       var parsed = JSON.parse(payload)
       root.categories = Array.isArray(parsed.categories) ? parsed.categories : []
+      root.tracked = PolicyModel.trackedCount(parsed.stats)
     } catch (error) {
       root.categories = []
+      root.tracked = 0
     }
   }
 
@@ -272,6 +284,21 @@ BarWidget {
             onToggled: root.toggleCategory(modelData.id)
           }
         }
+
+        SectionLabel { text: "Learning" }
+
+        SectionLabel { topPadding: 0; text: PolicyModel.learningLabel(root.tracked) }
+
+        // Spacing a hint out is the whole point of the schedule, so the way
+        // back has to be here: this forgets every interval omakey has built up
+        // and starts the shortcuts over at the first step. The effect-to-binding
+        // map is left alone -- that is omakey's own calibration, not the user's
+        // progress with a keyboard.
+        ResetButton {
+          width: layout.width
+          enabled: root.tracked > 0
+          onConfirmed: root.resetLearning()
+        }
       }
     }
   }
@@ -309,6 +336,45 @@ BarWidget {
     MouseArea {
       anchors.fill: parent
       onClicked: chip.picked()
+    }
+  }
+
+  // Two clicks rather than a dialog. The reset cannot be undone, and a modal
+  // over a layer-shell popup would take the keyboard focus this panel already
+  // holds -- so the button asks for itself instead: the second click has to
+  // land while it is still saying so, and the question expires on its own if
+  // the user moves on.
+  //
+  // qs.Ui's Button rather than a Rectangle of our own: it is where the hover,
+  // pressed and focus fills come from, and those are theme tokens the panel's
+  // hand-rolled chips do not get.
+  component ResetButton: Button {
+    id: reset
+    property bool confirming: false
+    signal confirmed()
+
+    text: reset.confirming ? "Click again to forget everything" : "Reset learning"
+    bordered: true
+    focusable: true
+    selected: reset.confirming
+    foreground: Color.popups.text
+    fontSize: Style.font.bodySmall
+    opacity: reset.enabled ? 1.0 : 0.4
+
+    onClicked: {
+      if (reset.confirming) {
+        reset.confirming = false
+        reset.confirmed()
+      } else {
+        reset.confirming = true
+        expiry.restart()
+      }
+    }
+
+    Timer {
+      id: expiry
+      interval: 4000
+      onTriggered: reset.confirming = false
     }
   }
 

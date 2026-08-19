@@ -89,7 +89,7 @@ directly.
 | `PayloadModel.js` | Build the Lua payload for `hyprctl eval` |
 | `CorrelatorModel.js` | Grace window, three-input decision |
 | `MapperModel.js` | Effect → candidate binding (dispatcher seed plus learned) |
-| `PolicyModel.js` | Adaptive policy, counters, tier gating, intensity presets |
+| `PolicyModel.js` | SM-2 hint schedule, counters, tier gating, intensity presets |
 | `SettingsModel.js` | shell.json entry precedence, defaults, normalisation |
 | `CategoryModel.js` | Source file to category, with a fallback for unknown files |
 | `ToastModel.js` | Where the hint card sits. Arithmetic, because anchors cannot be cleared |

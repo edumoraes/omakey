@@ -96,13 +96,33 @@ Item {
 
   readonly property var tiers: PolicyModel.tiersEnabled(root.capabilities)
 
+  onSettingsChanged: {
+    console.log("omakey: settings", JSON.stringify(root.settings),
+      "from", root.settingsEntry() ? "shell.json entry" : "defaults")
+    root.applyReset()
+  }
+
+  // The panel cannot call in here -- a bar widget is handed bar, moduleName and
+  // settings, never the service -- so the reset button stamps a timestamp onto
+  // the shell.json entry both halves already share. The stamp the service has
+  // acted on is kept in the state file, so a reset fires once and not again on
+  // every restart.
+  function applyReset() {
+    if (!store.loaded) return
+    if (root.settings.resetAt <= store.resetAt) return
+    store.stats = {}
+    store.resetAt = root.settings.resetAt
+    // Saved now rather than on the debounce: the user just asked for this, and
+    // a shell that dies in the next two seconds must not restore what they
+    // cleared.
+    store.save()
+    console.log("omakey: learning reset")
+  }
+
   // One line a bug reporter can paste that explains what was actually live.
   // The tiers are recomputed here rather than read off root.tiers: that binding
   // has not necessarily re-evaluated by the time this handler runs, and a line
   // pairing fresh capabilities with stale tiers is worse than no line at all.
-  onSettingsChanged: console.log("omakey: settings", JSON.stringify(root.settings),
-    "from", root.settingsEntry() ? "shell.json entry" : "defaults")
-
   onCapabilitiesChanged: console.log("omakey: capabilities",
     JSON.stringify(root.capabilities),
     "tiers", JSON.stringify(PolicyModel.tiersEnabled(root.capabilities)))
@@ -220,9 +240,11 @@ Item {
     if (hit) root.handleAdoption(hit.actionKey)
   }
 
-  // Adoption is what makes a hint fade, and what resets self-demotion.
+  // Adoption is what makes a hint fade, and what resets self-demotion. It is
+  // also the successful review that pushes the next reminder further out, which
+  // is why the policy config travels with it.
   function handleAdoption(actionKey) {
-    store.stats = PolicyModel.recordBind(store.stats || {}, actionKey, Date.now())
+    store.stats = PolicyModel.recordBind(store.stats || {}, actionKey, Date.now(), root.policyConfig)
     store.scheduleSave()
   }
 
@@ -232,7 +254,13 @@ Item {
     console.log("omakey: muted", actionKey)
   }
 
-  Store { id: store }
+  // The reset stamp may already be on the entry when the service starts, so the
+  // check has to run again once the state file is in -- onSettingsChanged alone
+  // would have missed it, having fired before the load.
+  Store {
+    id: store
+    onLoadedChanged: if (loaded) root.applyReset()
+  }
 
   // Quickshell's Hyprland module ships no type information for its toplevel
   // list; `hyprctl clients -j` is a documented contract carrying address, at

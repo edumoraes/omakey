@@ -13,8 +13,8 @@ test("the three presets are ordered from quiet to loud", () => {
 
   assert.ok(discreet.quietFirst > balanced.quietFirst)
   assert.ok(balanced.quietFirst > insistent.quietFirst)
-  assert.ok(discreet.cooldownMs > balanced.cooldownMs)
-  assert.ok(balanced.cooldownMs > insistent.cooldownMs)
+  assert.ok(discreet.baseIntervalMs > balanced.baseIntervalMs)
+  assert.ok(balanced.baseIntervalMs > insistent.baseIntervalMs)
   assert.ok(discreet.giveUpAfter < balanced.giveUpAfter)
   assert.ok(balanced.giveUpAfter < insistent.giveUpAfter)
 })
