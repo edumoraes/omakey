@@ -34,8 +34,8 @@ BarWidget {
 
   readonly property int gap: Style.space(8)
 
-  implicitWidth: root.vertical ? root.barSize : icon.implicitWidth + Style.space(12)
-  implicitHeight: root.vertical ? icon.implicitHeight + Style.space(12) : root.barSize
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
 
   function persist(changes) {
     var shell = root.bar ? root.bar.shell : null
@@ -54,21 +54,30 @@ BarWidget {
     root.persist({ mutedCategories: SettingsModel.toggleCategory(root.current.mutedCategories, categoryId) })
   }
 
-  Text {
-    id: icon
-    anchors.centerIn: parent
+  // BarIconButton rather than a Text plus a MouseArea of our own. The bar wraps
+  // every widget slot in its own MouseArea and routes the click through
+  // pressModuleClickTarget, which only finds targets that registered
+  // themselves -- and WidgetButton is what registers. A plain MouseArea leaves
+  // the click unaccepted, so it falls through to the bar's own gestures: two
+  // quick clicks on this icon reached the bar background as a double-click and
+  // toggled bar transparency, while the second click never arrived here to
+  // close the popup. Both symptoms, one cause.
+  //
+  // Extending it also brings the open-state indicator the native widgets have:
+  // `active` paints the glyph in bar.urgent.
+  BarIconButton {
+    id: button
+    anchors.fill: parent
+    bar: root.bar
     text: "󰌌"
-    color: root.bar ? root.bar.foreground : Color.foreground
-    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-    font.pixelSize: Style.font.icon
+    active: root.opened
     // A muted category is a state the user chose and can forget about, so the
     // icon carries it rather than leaving the bar silent about it.
-    opacity: root.current.mutedCategories.length > 0 ? 0.55 : 1.0
-  }
-
-  MouseArea {
-    anchors.fill: parent
-    onClicked: root.opened = !root.opened
+    dimmed: root.current.mutedCategories.length > 0
+    tooltipText: "omakey preferences"
+    onPressed: function (mouseButton) {
+      if (mouseButton === Qt.LeftButton) root.opened = !root.opened
+    }
   }
 
   // The service rewrites this file on every registry scan. watchChanges keeps
