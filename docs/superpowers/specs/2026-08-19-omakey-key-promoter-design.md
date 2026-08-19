@@ -453,11 +453,23 @@ paths.
 
 ## 13. Upstream
 
-The `Util.execDetached` wrap is the one part of the design that reaches into
-Omarchy's internals. An upstream pull request adding a shell-level "command
-executed" signal would let the wrap be deleted. Worth opening in parallel with
-implementation; not a blocker, since the wrap is feature-detected and fails
-isolated.
+Tier A was going to reach into Omarchy's internals by wrapping
+`Util.execDetached`. §12 records why that is impossible, and §12.1 records the
+decision to ship without it. What would restore Tier A is upstream emitting a
+signal when the shell runs a command — a few lines, additive, no behaviour
+change.
+
+That is now the *only* route to menu coverage, which makes it worth pursuing on
+its own merits rather than as tidying. It is not a blocker: the correlator
+already accepts a command input, so the signal drops into a seam that is
+designed for it, whenever it lands.
+
+The post is drafted at
+[`docs/upstream/2026-08-19-command-executed-signal.md`](../../upstream/2026-08-19-command-executed-signal.md)
+and has **not** been published. Route it per Omarchy's own
+`contributing.md`: feature ideas go to Discussions
+(https://github.com/basecamp/omarchy/discussions/categories/suggestions), not
+Issues.
 
 ## 14. Explicitly rejected
 
