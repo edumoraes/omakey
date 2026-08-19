@@ -197,7 +197,8 @@ Item {
       combo: combo,
       description: binding.description || "",
       actionKey: hit.actionKey,
-      position: root.settings.toastPosition
+      position: root.settings.toastPosition,
+      duration: root.settings.toastDuration
     }))
   }
 

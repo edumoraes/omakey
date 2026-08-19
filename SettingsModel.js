@@ -8,9 +8,15 @@ var POSITIONS = [
 
 var INTENSITIES = ["discreet", "balanced", "insistent"]
 
+// Four stops rather than a free number. The dwell time is a feel, not a
+// measurement, and a field that accepts 37000 is a way for the user to break
+// the hint without noticing. 4000 is what shipped before this was configurable.
+var DURATIONS = [2000, 4000, 7000, 10000]
+
 var DEFAULTS = {
   hintsEnabled: true,
   toastPosition: "bottom-center",
+  toastDuration: 4000,
   intensity: "balanced",
   mutedCategories: []
 }
@@ -50,6 +56,13 @@ function _oneOf(value, allowed, fallback) {
   return allowed.indexOf(String(value)) === -1 ? fallback : String(value)
 }
 
+// The numeric sibling of _oneOf. indexOf alone would accept a numeric string
+// off shell.json as a miss, so the value is coerced before it is looked up.
+function _oneOfNumber(value, allowed, fallback) {
+  var number = Number(value)
+  return allowed.indexOf(number) === -1 ? fallback : number
+}
+
 // A malformed value must not leave the toast unanchored or the policy
 // undefined, so every field falls back rather than propagating.
 function read(entry) {
@@ -67,6 +80,7 @@ function read(entry) {
     hintsEnabled: source.hintsEnabled !== false,
     toastPosition: _oneOf(source.toastPosition, POSITIONS, DEFAULTS.toastPosition),
     intensity: _oneOf(source.intensity, INTENSITIES, DEFAULTS.intensity),
+    toastDuration: _oneOfNumber(source.toastDuration, DURATIONS, DEFAULTS.toastDuration),
     mutedCategories: muted
   }
 }
@@ -87,6 +101,17 @@ function positionLabel(position) {
 
 function intensityLabel(intensity) {
   return _capitalize(intensity)
+}
+
+function durationLabel(duration) {
+  return String(Math.round(Number(duration) / 1000)) + "s"
+}
+
+// Where the knob sits. An unrecognised value puts it on the default rather than
+// off the track, which is the same fallback read() applies to the value itself.
+function durationIndex(duration) {
+  var found = DURATIONS.indexOf(Number(duration))
+  return found === -1 ? DURATIONS.indexOf(DEFAULTS.toastDuration) : found
 }
 
 // omakey's state lives in one place, and both the service that writes it and
@@ -124,8 +149,9 @@ function merge(entry, changes) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-  POSITIONS: POSITIONS, INTENSITIES: INTENSITIES, DEFAULTS: DEFAULTS,
+  POSITIONS: POSITIONS, INTENSITIES: INTENSITIES, DURATIONS: DURATIONS, DEFAULTS: DEFAULTS,
   resolveEntry: resolveEntry, read: read, toggleCategory: toggleCategory, merge: merge,
   positionLabel: positionLabel, intensityLabel: intensityLabel,
+  durationLabel: durationLabel, durationIndex: durationIndex,
   stateDir: stateDir, stateFile: stateFile
 }

@@ -32,6 +32,8 @@ Item {
     // The service normalises this through SettingsModel, so an unrecognised
     // value never reaches here; the guard is for a payload from anywhere else.
     root.position = String(payload.position || "bottom-center")
+    var dwell = Number(payload.duration)
+    root.duration = isFinite(dwell) && dwell > 0 ? dwell : 4000
     if (!root.combo) return
     root.opened = true
     hideTimer.restart()
