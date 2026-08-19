@@ -33,6 +33,10 @@ Item {
         args: root.parts(raw),
         at: Date.now()
       }
+      // What the wire carried, and only that. The service stamps an `owner`
+      // onto some layer events after this point, sampled from live shell state
+      // that no fixture can reproduce -- so a recording replays the correlator
+      // faithfully and leaves the owner path to its unit tests.
       if (root.recording) {
         root._lines.push(JSON.stringify(parsed))
         root._dirty = true

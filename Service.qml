@@ -91,7 +91,11 @@ Item {
   readonly property var capabilities: ({
     registry: registry.bindings.length > 0,
     shadows: injector.injected,
-    commands: false
+    commands: false,
+    // Whether the shell can be asked who opened a shared layer surface. Probed
+    // once here rather than per event, so the answer travels in the one line a
+    // bug reporter pastes instead of hiding behind a generic silence.
+    owners: !!root.shell && typeof root.shell.isPluginOpen === "function"
   })
 
   readonly property var tiers: PolicyModel.tiersEnabled(root.capabilities)
@@ -144,6 +148,13 @@ Item {
     // nothing rather than guessing.
     onEvent: function (parsed) {
       if (!injector.injected) return
+      // Sampled here rather than at promotion time. The promotion is a grace
+      // window later, and by then the user may have walked from the root menu
+      // into a submenu -- the shell would answer honestly about the wrong menu.
+      if (parsed.name === "openlayer" && root.capabilities.owners) {
+        var plan = MapperModel.samplingFor(String((parsed.args || [])[0] || ""))
+        if (plan) parsed.owner = root.sampleLayerOwner(plan)
+      }
       CorrelatorModel.ingest(root.correlatorState, parsed)
       // The gate needs a window's geometry as it was just before it closed, so
       // the cache is refreshed when windows appear or move, never on the close
@@ -178,7 +189,24 @@ Item {
     if (!allowed) return
 
     var hit = MapperModel.resolve(root.seed, store.learned || {}, promotion)
-    if (!hit) return
+    // Named, because this silence is the one that looks like a fault: an effect
+    // promotes like any other and then names no binding, which without a line
+    // here is indistinguishable from the correlator being dead. The OSD and the
+    // notification surface are left out -- they promote on every volume change
+    // and their silence is the design, so logging them would bury the fault
+    // this line exists to show.
+    if (!hit) {
+      var effect = promotion.effect || {}
+      var subject = String((effect.args || [])[0] || "")
+      if (!MapperModel.namesNoKey(subject)) {
+        // The subject and the sampled owner, because "no-binding" alone cannot
+        // tell a surface omakey failed to attribute from one it was never going
+        // to: the first is a gap worth closing, the second is the design.
+        console.log("omakey: silent", (effect.name || "?") + ":" + subject,
+          effect.owner ? "owner=" + effect.owner : "owner=none", "no-binding")
+      }
+      return
+    }
 
     // The category gate sits ahead of recordManual on purpose. A muted category
     // must not burn its quiet-start budget, advance hintCount, or trip
@@ -198,6 +226,39 @@ Item {
       return
     }
     root.showHint(hit)
+  }
+
+  // Who opened a surface that several bindings can open. socket2 names the
+  // layer and nothing else, but the shell it is running inside knows: which
+  // panel it has open, and which menu the menu plugin is showing. Asking costs
+  // no process and no round trip.
+  //
+  // The plan comes from MapperModel; this makes the call and nothing else.
+  // Every path out returns "" rather than a guess, and that lands on the same
+  // silence omakey has always kept for these namespaces.
+  function sampleLayerOwner(plan) {
+    if (plan.property) {
+      // The shell's plugin API forwards method calls only (shell.qml:565) and
+      // the menu exposes no getter, so the active menu is read off the loader
+      // the shell publishes -- the same walk the shell itself does for a
+      // foreign panel at shell.qml:817, raw plugin id included. Read-only, and
+      // a missing loader is an empty answer like any other.
+      var loader = (root.shell.panelLoaders || {})[plan.pluginId]
+      return loader && loader.item ? String(loader.item[plan.property] || "") : ""
+    }
+    // Every plugin the shell has, not just the ones a binding names and not
+    // just `panelEntries`: that list holds the panel/overlay/menu kinds only,
+    // while tailscale, weather and the agents picker are bar widgets with a
+    // panel behind them. Leaving those out is what left them unnameable.
+    // isPluginOpen answers false for anything that cannot be open, so a wide
+    // list costs a walk and buys the panels a keypress can still pair.
+    var known = []
+    var registry = root.shell.pluginRegistry
+    var installed = registry ? registry.installedPlugins : null
+    for (var id in (installed || {})) known.push(String(id))
+    return MapperModel.panelOwner(root.seed, known, function (candidate) {
+      return root.shell.isPluginOpen(candidate)
+    })
   }
 
   function categoryMuted(bindingId) {
