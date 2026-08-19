@@ -84,11 +84,14 @@ directly.
 | ~~`CommandHook.qml`~~ | **Cancelled.** It was to wrap `Util.execDetached`; QML refuses the assignment |
 | `Store.qml` | Loads and saves `~/.local/state/omakey/stats.json` |
 | `Toast.qml` | `panel` entry point. The hint UI, layer namespace `omakey-toast` |
+| `Widget.qml` | `bar-widget` entry point. The preferences panel. **Not** `BarWidget.qml` — `qs.Ui` exports a type by that name and a local file would shadow the base it extends |
 | `RegistryModel.js` | Parse scanner TSV into binding objects |
 | `PayloadModel.js` | Build the Lua payload for `hyprctl eval` |
 | `CorrelatorModel.js` | Grace window, three-input decision |
 | `MapperModel.js` | Effect → candidate binding (dispatcher seed plus learned) |
-| `PolicyModel.js` | Adaptive policy, counters, tier gating |
+| `PolicyModel.js` | Adaptive policy, counters, tier gating, intensity presets |
+| `SettingsModel.js` | shell.json entry precedence, defaults, normalisation |
+| `CategoryModel.js` | Source file to category, with a fallback for unknown files |
 | `lua/registry.lua` | Binding scanner: stubbed-`hl` sandbox over the user's config |
 | `lua/cursor.lua` | Cursor activity poller payload |
 | `tests/` | `node --test` unit tests and recorded socket2 fixtures |
@@ -194,10 +197,23 @@ re-verify them if a component is upgraded.
 | 20 of 257 Omarchy menu actions string-match a bound command | That is the real tier A menu coverage; normalising prefixes adds nothing |
 | QML singleton methods are read-only; `defineProperty` is silently ignored | `Util.execDetached` cannot be wrapped. Tier A has no in-process hook — see spec §12.1 |
 | `omarchy plugin validate` rejects any symlink inside the plugin folder | And the repository root *is* that folder |
+| A plugin has **one** shell.json entry: `bar.layout` is searched before `plugins[]` | Reads must use the same precedence as `updateEntryInline`, or the panel saves where the service does not look |
+| `isEnabled` ends in `findEntryLocation().found`, and `_syncServices` gates on it | A bar-layout entry still mounts the service — moving omakey to the bar does not kill the correlator |
+| `setEnabled` inserts into the bar layout only when the plugin has no entry yet | Enabling a widget on top of an existing `plugins[]` entry is a no-op that still prints `Enabled and moved` |
+| `omarchy-plugin-add` prompts for the bar section, but only when interactive and without `--yes` | Install-time placement is the CLI's job, not the plugin's |
+| `barWidget.schema[]` is stored at `shell.qml:696` and never rendered | Declaring it is free; it builds no UI |
+| A bar widget is injected `bar`, `moduleName`, `settings` — never `service` | Service-to-widget data has to go through a file or shell.json |
+| `Bar.qml:25` exposes `property var shell` | `bar.shell.updateEntryInline` is how a widget persists its own settings |
+| Every `hl.bind` call is made from `helpers.lua` | Attributing a binding to its own file means walking the stack past it, from level 3 |
 | `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
 
 **Still unverified** (spec §12): `hl.timer`'s exact signature, the panel layer
 namespaces, and whether one keypress fires a shadow once or several times.
+
+Also unverified: whether the correlator's cursor-activity gate can be driven
+synthetically. `hyprctl dispatch movecursor` does not satisfy it, so the
+category gate is covered by unit tests rather than by an observed live
+suppression. Testing it end to end needs a real pointer device.
 
 ---
 

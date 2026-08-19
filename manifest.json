@@ -2,17 +2,35 @@
   "schemaVersion": 1,
   "id": "omakey",
   "name": "omakey",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Eduardo de Moraes",
   "license": "MIT",
   "description": "Shows the keybinding you could have pressed instead of using the mouse",
   "kinds": [
     "service",
-    "panel"
+    "panel",
+    "bar-widget"
   ],
   "keepLoaded": true,
   "entryPoints": {
     "service": "Service.qml",
-    "panel": "Toast.qml"
+    "panel": "Toast.qml",
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "omakey",
+    "description": "Preferences for the keybinding hints",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "toastPosition": "bottom-center",
+      "intensity": "balanced",
+      "mutedCategories": []
+    },
+    "schema": [
+      { "key": "toastPosition", "type": "string", "label": "Hint position" },
+      { "key": "intensity", "type": "string", "label": "How much it speaks" }
+    ]
   }
 }

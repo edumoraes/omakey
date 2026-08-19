@@ -16,6 +16,10 @@ Item {
 
   property var learned: ({})
   property var stats: ({})
+  // Published by the service for the preferences widget to read. It is derived
+  // state, rebuilt on every scan, and a reader that ignores it is unaffected --
+  // which is why it does not bump the file version.
+  property var categories: []
 
   function adopt(text) {
     try {
@@ -23,6 +27,7 @@ Item {
       if (parsed && parsed.version === 1) {
         root.learned = parsed.learned || {}
         root.stats = parsed.stats || {}
+        if (Array.isArray(parsed.categories)) root.categories = parsed.categories
       }
     } catch (error) {
       // A corrupt or absent file is not an error: start from defaults.
@@ -33,7 +38,8 @@ Item {
     file.setText(JSON.stringify({
       version: 1,
       learned: root.learned,
-      stats: root.stats
+      stats: root.stats,
+      categories: root.categories
     }, null, 2) + "\n")
   }
 
