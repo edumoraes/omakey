@@ -117,7 +117,9 @@ omarchy plugin enable omakey     # takes a placement argument, not --yes
 # Qt's cached compiled QML and will happily re-run stale code.
 omarchy restart shell
 
-node --test tests/               # all logic is plain JS, so this covers it
+node --test                      # all logic is plain JS, so this covers it.
+                                 # Bare, no path: Node 25 resolves a positional
+                                 # `tests/` as a module and dies before running.
 journalctl --user -t omarchy-shell -f    # the shell's log, including ours
 
 hyprctl reload                   # removes every injected binding
