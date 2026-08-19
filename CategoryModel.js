@@ -4,23 +4,19 @@
 // actually runs rather than a table this file has to keep in step.
 
 // Omarchy ships six binding files; folding them into four keeps the panel
-// short. This table is a display convenience, never a filter: see categorize().
+// short. Only the files that join a group appear here: tiling, applications and
+// media already name their own category, and an unlisted file becomes one. This
+// table is a display convenience, never a filter -- see categorize().
 var GROUPS = {
-  tiling: "windows",
   utilities: "system",
   clipboard: "system",
-  voxtype: "system",
-  applications: "applications",
-  media: "media"
+  voxtype: "system"
 }
 
-var LABELS = {
-  windows: "Windows",
-  system: "System",
-  applications: "Applications",
-  media: "Media",
-  other: "Other"
-}
+// Every category label is its id capitalised, so there is no table to keep in
+// step with GROUPS. A category needing a label capitalisation cannot produce --
+// two words, an acronym -- is the reason to add one back.
+var FALLBACK = "other"
 
 function _basename(source) {
   var path = String(source || "")
@@ -30,9 +26,8 @@ function _basename(source) {
 }
 
 function _label(id) {
-  if (LABELS[id]) return LABELS[id]
-  var text = String(id || "")
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "Other"
+  var text = String(id || FALLBACK)
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 // A grouping table's one real failure mode is going stale and losing bindings
@@ -41,7 +36,7 @@ function _label(id) {
 // row in the panel rather than as bindings that quietly stop being promotable.
 function categorize(source) {
   var base = _basename(source)
-  if (!base) return { id: "other", label: LABELS.other }
+  if (!base) return { id: FALLBACK, label: _label(FALLBACK) }
   var id = GROUPS[base] || base
   return { id: id, label: _label(id) }
 }
