@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "SettingsModel.js" as SettingsModel
 
 // Persists what omakey has learned and how often it has spoken. This file is
 // the only thing omakey writes outside its own plugin folder.
@@ -12,7 +13,7 @@ import Quickshell.Io
 Item {
   id: root
 
-  readonly property string dir: Quickshell.env("HOME") + "/.local/state/omakey"
+  readonly property string dir: SettingsModel.stateDir(Quickshell.env("HOME"))
 
   property var learned: ({})
   property var stats: ({})
@@ -49,7 +50,7 @@ Item {
 
   FileView {
     id: file
-    path: root.dir + "/stats.json"
+    path: SettingsModel.stateFile(Quickshell.env("HOME"))
     watchChanges: false
     atomicWrites: true
     printErrors: false

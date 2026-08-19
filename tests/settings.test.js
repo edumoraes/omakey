@@ -82,3 +82,19 @@ test("merge keeps unknown fields on the entry", () => {
   assert.strictEqual(merged.intensity, "discreet")
   assert.strictEqual(merged.id, "omakey")
 })
+
+test("position labels read as prose, not as config keys", () => {
+  assert.strictEqual(Settings.positionLabel("bottom-center"), "Bottom center")
+  assert.strictEqual(Settings.positionLabel("top-left"), "Top left")
+})
+
+test("intensity labels are capitalised", () => {
+  assert.strictEqual(Settings.intensityLabel("insistent"), "Insistent")
+})
+
+// The service writes this file and the widget reads it; one spelling of the
+// path is the only thing keeping them pointed at the same place.
+test("the state path has a single definition", () => {
+  assert.strictEqual(Settings.stateDir("/home/me"), "/home/me/.local/state/omakey")
+  assert.strictEqual(Settings.stateFile("/home/me"), "/home/me/.local/state/omakey/stats.json")
+})
