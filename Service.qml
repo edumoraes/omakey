@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import "CorrelatorModel.js" as CorrelatorModel
 import "MapperModel.js" as MapperModel
 import "PolicyModel.js" as PolicyModel
@@ -83,7 +84,9 @@ Item {
   // 150 ms is long enough to catch a shadow that arrives after its effect;
   // 600 ms is the backward window, sized off a measured 309 ms lead for an
   // exec binding. Spec section 12 question 3 records the measurement.
-  property var correlatorState: CorrelatorModel.createState({ graceMs: 150, shadowMs: 600 })
+  property var correlatorState: CorrelatorModel.createState({
+    graceMs: 150, shadowMs: 600, cursorIdleMs: root.settingInt("cursorIdleMs", 800)
+  })
 
   Ingest {
     id: ingest
@@ -96,6 +99,11 @@ Item {
     onEvent: function (parsed) {
       if (!injector.injected) return
       CorrelatorModel.ingest(root.correlatorState, parsed)
+      // The gate needs a window's geometry as it was just before it closed, so
+      // the cache is refreshed when windows appear or move, never on the close
+      // itself.
+      if (parsed.name === "openwindow" || parsed.name === "movewindow"
+        || parsed.name === "resizewindow" || parsed.name === "closewindow") geometryDebounce.restart()
     }
   }
 
@@ -175,6 +183,32 @@ Item {
 
   Store { id: store }
 
+  // Quickshell's Hyprland module ships no type information for its toplevel
+  // list; `hyprctl clients -j` is a documented contract carrying address, at
+  // and size. Debounced because a window drag emits a burst of movewindow.
+  Timer {
+    id: geometryDebounce
+    interval: 250
+    onTriggered: if (!clients.running) { clients.buffer = ""; clients.running = true }
+  }
+
+  Process {
+    id: clients
+    command: ["hyprctl", "clients", "-j"]
+    property string buffer: ""
+    stdout: SplitParser {
+      onRead: function (line) { clients.buffer += line }
+    }
+    onExited: function (exitCode) {
+      if (exitCode !== 0) return
+      try {
+        CorrelatorModel.setGeometryFromClients(root.correlatorState, JSON.parse(clients.buffer))
+      } catch (error) {
+        console.warn("omakey: clients parse failed:", error)
+      }
+    }
+  }
+
   Registry {
     id: registry
     pluginPath: root.pluginPath
@@ -188,6 +222,7 @@ Item {
 
   Injector {
     id: injector
+    pluginPath: root.pluginPath
     onApplied: function (count, skipped) {
       console.log("omakey: shadow bindings", skipped ? "already present" : ("injected " + count))
     }

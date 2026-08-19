@@ -71,7 +71,15 @@ test("events outside the effect map are ignored", () => {
 })
 
 test("window close is tier C", () => {
-  const state = Correlator.createState(CONFIG)
+  assert.strictEqual(Correlator.EFFECTS["closewindow"], "C")
+
+  // Classification alone no longer promotes it: tier C is gated on the cursor,
+  // which the tests further down cover. With the gate satisfied it comes
+  // through carrying its tier.
+  const state = Correlator.createState({ graceMs: 150, cursorIdleMs: 800 })
+  Correlator.setGeometry(state, "0x1", { x: 0, y: 0, width: 100, height: 100 })
+  state.cursorAt = { x: 50, y: 50 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 950 })
   Correlator.ingest(state, effect("closewindow", ["0x1"], 1000))
   assert.strictEqual(Correlator.flush(state, 1200)[0].tier, "C")
 })
@@ -189,4 +197,96 @@ test("a promoted effect produces no lesson", () => {
   Correlator.ingest(state, effect("workspacev2", ["3", "3"], 1000))
   Correlator.flush(state, 1200)
   assert.deepStrictEqual(Correlator.drainSuppressions(state), [])
+})
+
+// Tier C is the noisy tier: a window closing is usually the application's own
+// Ctrl+W, not a click on a titlebar button. The brake is the cursor -- it has
+// to have moved recently, and for a close it has to have been over the window
+// that closed. Spec section 9: when the gate cannot judge, it suppresses.
+const GATED = { graceMs: 150, cursorIdleMs: 800 }
+
+test("tier C is suppressed when the cursor has been idle", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:idle"], at: 0 })
+  Correlator.setGeometry(state, "0x1", { x: 0, y: 0, width: 100, height: 100 })
+  Correlator.ingest(state, effect("closewindow", ["0x1"], 5000))
+  assert.deepStrictEqual(Correlator.flush(state, 5200), [])
+})
+
+test("tier C passes when the cursor moved recently inside the window", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.setGeometry(state, "0x1", { x: 0, y: 0, width: 100, height: 100 })
+  state.cursorAt = { x: 50, y: 50 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("closewindow", ["0x1"], 5000))
+  assert.strictEqual(Correlator.flush(state, 5200).length, 1)
+})
+
+test("tier C is suppressed when the cursor is outside the closed window", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.setGeometry(state, "0x1", { x: 0, y: 0, width: 100, height: 100 })
+  state.cursorAt = { x: 900, y: 900 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("closewindow", ["0x1"], 5000))
+  assert.deepStrictEqual(Correlator.flush(state, 5200), [])
+})
+
+test("tier B is not gated on the cursor", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:idle"], at: 0 })
+  Correlator.ingest(state, effect("workspacev2", ["3", "3"], 5000))
+  assert.strictEqual(Correlator.flush(state, 5200).length, 1)
+})
+
+test("a close with no known geometry is suppressed rather than guessed at", () => {
+  const state = Correlator.createState(GATED)
+  state.cursorAt = { x: 50, y: 50 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("closewindow", ["0xdead"], 5000))
+  assert.deepStrictEqual(Correlator.flush(state, 5200), [])
+})
+
+// Hyprland reports window addresses bare on socket2 ("55ba0ae078a0") and
+// prefixed through hyprctl ("0x55ba0ae078a0"). Storing one and looking up the
+// other would leave every geometry permanently unknown, which the gate reads
+// as "suppress" -- tier C would go silently dead.
+test("geometry matches whether or not the address carries an 0x prefix", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.setGeometry(state, "0x55ba0ae078a0", { x: 0, y: 0, width: 100, height: 100 })
+  state.cursorAt = { x: 50, y: 50 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("closewindow", ["55ba0ae078a0"], 5000))
+  assert.strictEqual(Correlator.flush(state, 5200).length, 1)
+})
+
+test("the cursor payload carries the position it was read at", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving:1014:552"], at: 1000 })
+  assert.strictEqual(state.cursorMovingAt, 1000)
+  assert.deepStrictEqual(state.cursorAt, { x: 1014, y: 552 })
+})
+
+test("a tier C effect other than close needs only recent cursor movement", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("fullscreen", ["1"], 5000))
+  assert.strictEqual(Correlator.flush(state, 5200).length, 1)
+})
+
+test("geometry is taken from the shape hyprctl clients reports", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.setGeometryFromClients(state, [
+    { address: "0x55ba0916cd10", at: [12, 38], size: [1896, 1030] },
+    { address: "0xdeadbeef", at: [0, 0], size: [10, 10] }
+  ])
+  state.cursorAt = { x: 900, y: 500 }
+  Correlator.ingest(state, { name: "custom", args: ["omakey", "cursor:moving"], at: 4800 })
+  Correlator.ingest(state, effect("closewindow", ["55ba0916cd10"], 5000))
+  assert.strictEqual(Correlator.flush(state, 5200).length, 1)
+})
+
+test("a client with no usable geometry is skipped rather than stored as zero", () => {
+  const state = Correlator.createState(GATED)
+  Correlator.setGeometryFromClients(state, [{ address: "0x1" }, null])
+  assert.deepStrictEqual(state.geometry, {})
 })

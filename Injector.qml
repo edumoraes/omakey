@@ -3,9 +3,9 @@ import Quickshell
 import Quickshell.Io
 import "PayloadModel.js" as PayloadModel
 
-// Applies the shadow-binding payload to the live compositor through
-// `hyprctl eval`. `hyprctl keyword` is refused under the Lua config parser, so
-// eval is the only runtime channel -- see spec 3.2.
+// Applies omakey's Lua payloads to the live compositor through `hyprctl eval`.
+// `hyprctl keyword` is refused under the Lua config parser, so eval is the only
+// runtime channel -- see spec 3.2.
 Item {
   id: root
 
@@ -14,9 +14,11 @@ Item {
 
   property bool injected: false
   property int chunkSize: 40
+  property string pluginPath: ""
 
   property var _bindings: []
   property var _queue: []
+  property bool _skipped: false
 
   function apply(bindings) {
     root._bindings = bindings || []
@@ -25,6 +27,7 @@ Item {
       return
     }
     root.injected = false
+    root._skipped = false
     counter.running = true
   }
 
@@ -37,11 +40,11 @@ Item {
     id: counter
     command: ["bash", "-c", "hyprctl binds | grep -c '^bind' || true"]
 
+    property int count: -1
+
     stdout: SplitParser {
       onRead: function (line) { counter.count = parseInt(String(line).trim(), 10) }
     }
-
-    property int count: -1
 
     onExited: function (exitCode) {
       if (exitCode !== 0 || counter.count < 0) {
@@ -49,8 +52,8 @@ Item {
         return
       }
       if (counter.count >= root._bindings.length * 2) {
-        root.injected = true
-        root.applied(0, true)
+        root._skipped = true
+        root._applyCursor()
         return
       }
       root._queue = PayloadModel.buildChunks(root._bindings, root.chunkSize)
@@ -62,15 +65,17 @@ Item {
     }
   }
 
+  // The `--` is not decoration: hyprctl parses a leading `--` in the payload as
+  // its own flag, so any Lua whose first line is a comment reaches it as a
+  // usage error rather than as code.
   function _next() {
     if (!root._queue.length) {
-      root.injected = true
-      root.applied(root._bindings.length, false)
+      root._applyCursor()
       return
     }
     var chunk = root._queue[0]
     root._queue = root._queue.slice(1)
-    evaluator.command = ["hyprctl", "eval", chunk]
+    evaluator.command = ["hyprctl", "eval", "--", chunk]
     evaluator.running = true
   }
 
@@ -82,6 +87,40 @@ Item {
         return
       }
       root._next()
+    }
+  }
+
+  // The cursor poller guards itself with a sentinel global in the compositor's
+  // Lua VM, so it is applied on every pass -- including the one that skips the
+  // bindings -- and a second application is a no-op.
+  function _applyCursor() {
+    var payload = cursorFile.text()
+    if (!payload) {
+      console.warn("omakey: cursor payload unreadable, tier C stays gated shut")
+      root._finish()
+      return
+    }
+    cursorEval.command = ["hyprctl", "eval", "--", payload]
+    cursorEval.running = true
+  }
+
+  function _finish() {
+    root.injected = true
+    root.applied(root._skipped ? 0 : root._bindings.length, root._skipped)
+  }
+
+  FileView {
+    id: cursorFile
+    path: root.pluginPath ? root.pluginPath + "/lua/cursor.lua" : ""
+    watchChanges: false
+    printErrors: false
+  }
+
+  Process {
+    id: cursorEval
+    onExited: function (exitCode) {
+      if (exitCode !== 0) console.warn("omakey: cursor poller eval exit", exitCode)
+      root._finish()
     }
   }
 }

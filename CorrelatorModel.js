@@ -25,8 +25,12 @@ function createState(config) {
     lastShadowAt: -1,
     lastShadowId: -1,
     lastCommandAt: -1,
+    // Tier C only passes if the cursor moved this recently before the effect.
+    cursorIdleMs: Number(config && config.cursorIdleMs) || 800,
     cursorMovingAt: -1,
     cursorIdleAt: -1,
+    cursorAt: null,
+    geometry: {},
     ready: [],
     // Effects a shadow explained. Suppressed for promotion, but kept: they are
     // the only evidence of which binding produces which effect.
@@ -53,9 +57,15 @@ function ingest(state, parsed) {
 
   if (_isOmakeyEvent(parsed)) {
     var payload = String(parsed.args[1] || "")
+    // "cursor:moving:<x>:<y>" -- colon-separated because socket2 splits the
+    // event payload on commas.
     if (payload.indexOf("cursor:") === 0) {
-      if (payload === "cursor:moving") state.cursorMovingAt = parsed.at
+      var cursor = payload.split(":")
+      if (cursor[1] === "moving") state.cursorMovingAt = parsed.at
       else state.cursorIdleAt = parsed.at
+      var x = Number(cursor[2])
+      var y = Number(cursor[3])
+      if (isFinite(x) && isFinite(y)) state.cursorAt = { x: x, y: y }
       return
     }
     state.lastShadowAt = parsed.at
@@ -85,6 +95,54 @@ function ingest(state, parsed) {
   state.pending.push({ effect: parsed, tier: tier, due: parsed.at + state.graceMs })
 }
 
+// Hyprland reports window addresses bare on socket2 ("55ba0ae078a0") and
+// prefixed through hyprctl ("0x55ba0ae078a0").
+function _address(value) {
+  return String(value || "").replace(/^0x/, "")
+}
+
+function setGeometry(state, address, rect) {
+  state.geometry[_address(address)] = rect
+}
+
+// `hyprctl clients -j` is the geometry source: Quickshell's Hyprland module
+// ships no type information for its toplevel list, while the hyprctl JSON is a
+// documented contract carrying address, at and size.
+function setGeometryFromClients(state, clients) {
+  for (var i = 0; i < (clients || []).length; i++) {
+    var client = clients[i]
+    if (!client || !client.address) continue
+    var at = client.at || []
+    var size = client.size || []
+    if (at.length < 2 || size.length < 2) continue
+    state.geometry[_address(client.address)] = {
+      x: Number(at[0]), y: Number(at[1]),
+      width: Number(size[0]), height: Number(size[1])
+    }
+  }
+}
+
+function _cursorInside(cursor, rect) {
+  return !!cursor && !!rect &&
+    cursor.x >= rect.x && cursor.x <= rect.x + rect.width &&
+    cursor.y >= rect.y && cursor.y <= rect.y + rect.height
+}
+
+// A window closing is far more often the application's own Ctrl+W than a click
+// on a titlebar button, so tier C has to earn its promotion: the cursor must
+// have moved just before, and for a close it must have been over the window
+// that closed. When the gate cannot judge -- no geometry, no position -- it
+// suppresses. Spec section 9.
+function _cursorAllows(state, item) {
+  if (item.tier !== "C") return true
+  if (state.cursorMovingAt < 0) return false
+  if (item.effect.at - state.cursorMovingAt > state.cursorIdleMs) return false
+  if (item.effect.name !== "closewindow") return true
+
+  var rect = state.geometry[_address((item.effect.args || [])[0])]
+  return _cursorInside(state.cursorAt, rect)
+}
+
 function command(state, commandString, at) {
   if (!commandString) return
   state.lastCommandAt = at
@@ -103,6 +161,7 @@ function flush(state, now) {
       state.suppressed.push({ bindingId: state.lastShadowId, effect: item.effect })
       continue
     }
+    if (!_cursorAllows(state, item)) continue
     out.push({ tier: item.tier, effect: item.effect, command: null, at: item.effect.at })
   }
   state.pending = keep
@@ -117,5 +176,6 @@ function drainSuppressions(state) {
 
 if (typeof module !== "undefined") module.exports = {
   EFFECTS: EFFECTS, createState: createState, ingest: ingest, command: command,
-  flush: flush, drainSuppressions: drainSuppressions
+  flush: flush, drainSuppressions: drainSuppressions, setGeometry: setGeometry,
+  setGeometryFromClients: setGeometryFromClients
 }
