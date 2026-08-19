@@ -11,15 +11,18 @@ import "SettingsModel.js" as SettingsModel
 // because qs.Ui already exports a type called BarWidget: a local file of that
 // name would shadow the base this very item extends.
 //
-// The popup is a layer-shell PanelWindow of its own rather than the bar's
-// popup machinery. That machinery is first-party plumbing with no documented
-// third-party contract, while this technique is already proven in Toast.qml
-// next door.
+// The popup is built on qs.Ui's KeyboardPanel, the same component Omarchy's own
+// bar popups use. A hand-rolled PanelWindow looked equivalent and was not: see
+// the note on the KeyboardPanel below.
 BarWidget {
   id: root
   moduleName: "omakey"
 
   property bool opened: false
+
+  // KeyboardPanel.close() routes here when the user dismisses by clicking
+  // outside or pressing Escape.
+  function close() { root.opened = false }
 
   // The bar injects this widget's inline shell.json entry as `settings`, which
   // is the same entry the service reads. Normalising through the shared model
@@ -101,107 +104,107 @@ BarWidget {
     }
   }
 
-  PanelWindow {
-    visible: root.opened
-    color: "transparent"
-    anchors { top: true; bottom: true; left: true; right: true }
-
-    // CorrelatorModel drops openlayer events whose namespace begins with
-    // "omakey", so opening this panel cannot promote itself into a hint.
+  // KeyboardPanel is the component Omarchy's own bar popups are built on, and
+  // adopting it replaced a hand-rolled PanelWindow that was subtly wrong on
+  // this compositor: a stationary second click on the button did nothing at
+  // all. Its comments name the reason -- a layer surface has to prime
+  // WlrKeyboardFocus.Exclusive and then settle on OnDemand, or Hyprland keeps
+  // routing pointer events past the surfaces below until the cursor moves.
+  //
+  // It also covers the full screen and masks the bar strip back out, so a
+  // click on this button while the panel is open reaches the button instead of
+  // being swallowed. Getting that combination right by hand is what three
+  // attempts here failed to do.
+  KeyboardPanel {
+    id: panel
+    anchorItem: button
+    owner: root
+    bar: root.bar
+    open: root.opened
+    focusTarget: keyCatcher
+    // KeyboardPanel names its surface "omarchy-keyboard-panel". That has to be
+    // overridden here: CorrelatorModel drops openlayer events whose namespace
+    // starts with "omakey" (CorrelatorModel.js:87), and without the prefix,
+    // opening this very panel with the mouse becomes an effect omakey can
+    // promote into a hint about itself.
+    //
+    // The cost is Omarchy's `no_anim` layer rule, which matches the native
+    // namespace exactly (default/hypr/apps/omarchy-shell.lua:10), so this panel
+    // gets the compositor's default layer animation on top of the card's own
+    // fade. A cosmetic difference, traded for not hinting at itself.
     WlrLayershell.namespace: "omakey-preferences"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-    Item {
+    contentWidth: panel.fittedContentWidth(Style.space(300))
+    contentHeight: panel.fittedContentHeight(layout.implicitHeight)
+
+    PanelKeyCatcher {
+      id: keyCatcher
       anchors.fill: parent
-      focus: true
-      Keys.onEscapePressed: root.opened = false
+      onCloseRequested: root.close()
 
-      // Clicking anywhere outside the card dismisses it. The card sits above
-      // this and stops the event.
-      MouseArea {
-        anchors.fill: parent
-        onClicked: root.opened = false
-      }
-
-      Rectangle {
-        id: card
-
-        anchors.top: root.bar && root.bar.position === "bottom" ? undefined : parent.top
-        anchors.bottom: root.bar && root.bar.position === "bottom" ? parent.bottom : undefined
+      Column {
+        id: layout
+        anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: Style.space(12)
+        anchors.top: parent.top
+        spacing: root.gap
 
-        radius: Style.cornerRadius
-        color: Color.popups.background
-        border.color: Color.popups.border
-        border.width: Math.max(1, Style.space(2))
-        implicitWidth: layout.implicitWidth + Style.space(32)
-        implicitHeight: layout.implicitHeight + Style.space(32)
+        Text {
+          text: "omakey"
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+        }
 
-        MouseArea { anchors.fill: parent }
+        SectionLabel { text: "Hint position" }
 
-        Column {
-          id: layout
-          anchors.centerIn: parent
-          spacing: root.gap
-
-          Text {
-            text: "omakey"
-            color: Color.popups.text
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-          }
-
-          SectionLabel { text: "Hint position" }
-
-          Grid {
-            columns: 3
-            spacing: Style.space(4)
-            Repeater {
-              model: SettingsModel.POSITIONS
-              ChoiceChip {
-                label: SettingsModel.positionLabel(modelData)
-                selected: root.current.toastPosition === modelData
-                onPicked: root.setPosition(modelData)
-              }
-            }
-          }
-
-          SectionLabel { text: "How much it speaks" }
-
-          Row {
-            spacing: Style.space(4)
-            Repeater {
-              model: SettingsModel.INTENSITIES
-              ChoiceChip {
-                label: SettingsModel.intensityLabel(modelData)
-                selected: root.current.intensity === modelData
-                onPicked: root.setIntensity(modelData)
-              }
-            }
-          }
-
-          SectionLabel { text: "Categories" }
-
-          Text {
-            visible: root.categories.length === 0
-            text: "No bindings scanned yet"
-            color: Color.popups.text
-            opacity: 0.6
-            font.family: Style.font.family
-            font.pixelSize: Style.font.bodySmall
-          }
-
+        Grid {
+          columns: 3
+          spacing: Style.space(4)
           Repeater {
-            model: root.categories
-            CategoryRow {
-              label: modelData.label
-              count: modelData.count
-              muted: CategoryModel.isMuted(root.current.mutedCategories, modelData.id)
-              onToggled: root.toggleCategory(modelData.id)
+            model: SettingsModel.POSITIONS
+            ChoiceChip {
+              label: SettingsModel.positionLabel(modelData)
+              selected: root.current.toastPosition === modelData
+              onPicked: root.setPosition(modelData)
             }
+          }
+        }
+
+        SectionLabel { text: "How much it speaks" }
+
+        Row {
+          spacing: Style.space(4)
+          Repeater {
+            model: SettingsModel.INTENSITIES
+            ChoiceChip {
+              label: SettingsModel.intensityLabel(modelData)
+              selected: root.current.intensity === modelData
+              onPicked: root.setIntensity(modelData)
+            }
+          }
+        }
+
+        SectionLabel { text: "Categories" }
+
+        Text {
+          visible: root.categories.length === 0
+          text: "No bindings scanned yet"
+          color: Color.popups.text
+          opacity: 0.6
+          font.family: Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        Repeater {
+          model: root.categories
+          CategoryRow {
+            width: layout.width
+            label: modelData.label
+            count: modelData.count
+            muted: CategoryModel.isMuted(root.current.mutedCategories, modelData.id)
+            onToggled: root.toggleCategory(modelData.id)
           }
         }
       }
@@ -251,7 +254,6 @@ BarWidget {
     property bool muted: false
     signal toggled()
 
-    implicitWidth: Math.max(rowText.implicitWidth + countText.implicitWidth + Style.space(48), Style.space(180))
     implicitHeight: rowText.implicitHeight + Style.space(8)
 
     Rectangle {
