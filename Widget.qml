@@ -75,7 +75,7 @@ BarWidget {
   // the category list current without the widget having to poll or rescan.
   FileView {
     id: state
-    path: Quickshell.env("HOME") + "/.local/state/omakey/stats.json"
+    path: SettingsModel.stateFile(Quickshell.env("HOME"))
     watchChanges: true
     printErrors: false
     onLoaded: root.adoptState(text())
@@ -153,8 +153,7 @@ BarWidget {
             Repeater {
               model: SettingsModel.POSITIONS
               ChoiceChip {
-                label: String(modelData).replace(/^(top|bottom)-/, "").replace(/^./, function (c) { return c.toUpperCase() })
-                sublabel: String(modelData).indexOf("top-") === 0 ? "top" : "bottom"
+                label: SettingsModel.positionLabel(modelData)
                 selected: root.current.toastPosition === modelData
                 onPicked: root.setPosition(modelData)
               }
@@ -168,7 +167,7 @@ BarWidget {
             Repeater {
               model: SettingsModel.INTENSITIES
               ChoiceChip {
-                label: String(modelData).replace(/^./, function (c) { return c.toUpperCase() })
+                label: SettingsModel.intensityLabel(modelData)
                 selected: root.current.intensity === modelData
                 onPicked: root.setIntensity(modelData)
               }
@@ -191,7 +190,7 @@ BarWidget {
             CategoryRow {
               label: modelData.label
               count: modelData.count
-              enabled_: !CategoryModel.isMuted(root.current.mutedCategories, modelData.id)
+              muted: CategoryModel.isMuted(root.current.mutedCategories, modelData.id)
               onToggled: root.toggleCategory(modelData.id)
             }
           }
@@ -211,7 +210,6 @@ BarWidget {
   component ChoiceChip: Rectangle {
     id: chip
     property string label: ""
-    property string sublabel: ""
     property bool selected: false
     signal picked()
 
@@ -225,7 +223,7 @@ BarWidget {
     Text {
       id: chipText
       anchors.centerIn: parent
-      text: chip.sublabel ? chip.sublabel + " " + chip.label : chip.label
+      text: chip.label
       color: chip.selected ? Color.popups.background : Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
@@ -239,11 +237,9 @@ BarWidget {
 
   component CategoryRow: Item {
     id: row
-    // `enabled` is taken by Item, and shadowing it would stop the row taking
-    // clicks at all.
     property string label: ""
     property int count: 0
-    property bool enabled_: true
+    property bool muted: false
     signal toggled()
 
     implicitWidth: Math.max(rowText.implicitWidth + countText.implicitWidth + Style.space(48), Style.space(180))
@@ -255,7 +251,7 @@ BarWidget {
       width: Style.space(10)
       height: Style.space(10)
       radius: width / 2
-      color: row.enabled_ ? Color.popups.text : "transparent"
+      color: row.muted ? "transparent" : Color.popups.text
       border.color: Color.popups.border
       border.width: Math.max(1, Style.space(1))
     }
@@ -267,7 +263,7 @@ BarWidget {
       anchors.leftMargin: Style.space(18)
       text: row.label
       color: Color.popups.text
-      opacity: row.enabled_ ? 1.0 : 0.5
+      opacity: row.muted ? 0.5 : 1.0
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }

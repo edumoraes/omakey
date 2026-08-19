@@ -66,6 +66,35 @@ function read(entry) {
   }
 }
 
+function _capitalize(text) {
+  var value = String(text || "")
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : ""
+}
+
+// Rendered labels belong here rather than inline in the QML, both because the
+// house rule keeps logic out of QML and because a label is the one part of a
+// setting a test can assert on.
+function positionLabel(position) {
+  var parts = String(position || "").split("-")
+  if (parts.length !== 2) return _capitalize(position)
+  return _capitalize(parts[0]) + " " + parts[1]
+}
+
+function intensityLabel(intensity) {
+  return _capitalize(intensity)
+}
+
+// omakey's state lives in one place, and both the service that writes it and
+// the widget that reads it have to agree on where. Two spellings of the same
+// path is the kind of duplication that only shows up once they differ.
+function stateDir(home) {
+  return String(home || "") + "/.local/state/omakey"
+}
+
+function stateFile(home) {
+  return stateDir(home) + "/stats.json"
+}
+
 function toggleCategory(mutedCategories, categoryId) {
   var current = Array.isArray(mutedCategories) ? mutedCategories : []
   var next = []
@@ -91,5 +120,7 @@ function merge(entry, changes) {
 
 if (typeof module !== "undefined") module.exports = {
   POSITIONS: POSITIONS, INTENSITIES: INTENSITIES, DEFAULTS: DEFAULTS,
-  resolveEntry: resolveEntry, read: read, toggleCategory: toggleCategory, merge: merge
+  resolveEntry: resolveEntry, read: read, toggleCategory: toggleCategory, merge: merge,
+  positionLabel: positionLabel, intensityLabel: intensityLabel,
+  stateDir: stateDir, stateFile: stateFile
 }
