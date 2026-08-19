@@ -1,8 +1,9 @@
 # omakey — a Key Promoter for Omarchy
 
-**Status:** design approved, not implemented
+**Status:** approved; plan Task 1 executed, Tasks 2-12 outstanding
 **Date:** 2026-08-19
 **Target:** Omarchy 4.0.0.alpha, Hyprland 0.56.2
+**Amended:** 2026-08-19 — §12 questions 1 and 2 answered, §12.1 added and decided
 
 ## 1. What it is
 
