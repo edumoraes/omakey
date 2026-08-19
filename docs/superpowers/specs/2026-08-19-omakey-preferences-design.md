@@ -65,6 +65,10 @@ only when `!location.found` (PluginRegistry:503). omakey already has a
 --section right` is a silent no-op and the widget never appears. Existing users
 must `omarchy plugin disable omakey` first. This is a README note, not code.
 
+Confirmed on the running system, and worse than the code alone suggests: the
+CLI prints `Enabled and moved omakey` and exits successfully while changing
+nothing. The failure announces itself as a success.
+
 ### 1.4 What a bar widget is handed
 
 `Bar.qml:1747-1752` injects exactly three properties:
@@ -196,7 +200,7 @@ breaks on an upgrade it cannot see coming.
 | Path | Change |
 |---|---|
 | `manifest.json` | `bar-widget` in `kinds`, `entryPoints.barWidget`, `barWidget` block with `defaultSection: "right"` |
-| `BarWidget.qml` | **new** — bar icon plus the preferences popup |
+| `Widget.qml` | **new** — bar icon plus the preferences popup. Not `BarWidget.qml`: `qs.Ui` exports a type by that name, and a local file would shadow the base it extends |
 | `SettingsModel.js` | **new** — entry precedence, defaults, normalisation |
 | `CategoryModel.js` | **new** — source-file grouping with fallback, counts |
 | `lua/registry.lua` | `origin()` and the seventh column |
@@ -237,7 +241,19 @@ intensity and position writes shell.json and the next toast obeys; muting
 `windows` suppresses the 100 tiling hints and leaves the other three categories
 speaking.
 
-## 8. Deliberately out of scope
+## 8. What was verified live, and what was not
+
+Against the running shell: the service stays mounted with its only shell.json
+entry in the bar layout; the scan produces the four categories with the counts
+above and publishes them to the state file; and settings resolve from the
+layout entry rather than from `plugins[]`.
+
+Not verified live: a suppressed promotion in a muted category. The
+cursor-activity gate sits ahead of the category gate and is not satisfied by
+`hyprctl dispatch movecursor`, so reaching it needs a real pointer device. The
+category gate is covered by unit tests instead.
+
+## 9. Deliberately out of scope
 
 **Bar-aware toast margins.** With `bar.position: "top"` and
 `toastPosition: "top-center"`, the toast can overlap the bar. Reading
