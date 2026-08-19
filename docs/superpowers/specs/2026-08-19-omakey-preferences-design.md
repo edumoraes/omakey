@@ -151,7 +151,7 @@ independent counters is asking them to reason about the correlator.
 
 | Category | Source files | Bindings |
 |---|---|---|
-| `windows` | `tiling` | 100 |
+| `tiling` | `tiling` | 100 |
 | `system` | `utilities`, `clipboard`, `voxtype` | 72 |
 | `applications` | `applications` | 28 |
 | `media` | `media` | 28 |
@@ -238,7 +238,7 @@ grouping table, the unknown-file fallback, and counts.
 Against the running desktop: `omarchy plugin validate .`, then
 `omarchy restart shell`; the widget appears in the chosen section; changing
 intensity and position writes shell.json and the next toast obeys; muting
-`windows` suppresses the 100 tiling hints and leaves the other three categories
+`tiling` suppresses the 100 tiling hints and leaves the other three categories
 speaking.
 
 ## 8. What was verified live, and what was not

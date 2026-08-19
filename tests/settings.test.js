@@ -37,10 +37,10 @@ test("defaults apply when there is no entry at all", () => {
 })
 
 test("valid values are carried through", () => {
-  const settings = Settings.read({ id: "omakey", toastPosition: "top-right", intensity: "discreet", mutedCategories: ["windows"] })
+  const settings = Settings.read({ id: "omakey", toastPosition: "top-right", intensity: "discreet", mutedCategories: ["tiling"] })
   assert.strictEqual(settings.toastPosition, "top-right")
   assert.strictEqual(settings.intensity, "discreet")
-  assert.deepStrictEqual(settings.mutedCategories, ["windows"])
+  assert.deepStrictEqual(settings.mutedCategories, ["tiling"])
 })
 
 // A malformed value must not leave the toast unanchored or the policy
@@ -52,12 +52,12 @@ test("an unrecognised value falls back to the default", () => {
 })
 
 test("a non-array mutedCategories reads as empty", () => {
-  assert.deepStrictEqual(Settings.read({ mutedCategories: "windows" }).mutedCategories, [])
+  assert.deepStrictEqual(Settings.read({ mutedCategories: "tiling" }).mutedCategories, [])
   assert.deepStrictEqual(Settings.read({ mutedCategories: null }).mutedCategories, [])
 })
 
 test("mutedCategories keeps only strings", () => {
-  assert.deepStrictEqual(Settings.read({ mutedCategories: ["windows", 3, null, "media"] }).mutedCategories, ["windows", "media"])
+  assert.deepStrictEqual(Settings.read({ mutedCategories: ["tiling", 3, null, "media"] }).mutedCategories, ["tiling", "media"])
 })
 
 test("the six toast positions are the supported set", () => {
@@ -68,10 +68,10 @@ test("the six toast positions are the supported set", () => {
 })
 
 test("toggle adds and removes a category without mutating the input", () => {
-  const before = ["windows"]
-  assert.deepStrictEqual(Settings.toggleCategory(before, "media"), ["windows", "media"])
-  assert.deepStrictEqual(Settings.toggleCategory(before, "windows"), [])
-  assert.deepStrictEqual(before, ["windows"])
+  const before = ["tiling"]
+  assert.deepStrictEqual(Settings.toggleCategory(before, "media"), ["tiling", "media"])
+  assert.deepStrictEqual(Settings.toggleCategory(before, "tiling"), [])
+  assert.deepStrictEqual(before, ["tiling"])
 })
 
 // updateEntryInline rewrites the whole entry from what it is given, so the

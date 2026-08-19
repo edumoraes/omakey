@@ -26,7 +26,11 @@ test("every binding is attributed", () => {
 })
 
 test("known source files fold into the four groups", () => {
-  assert.strictEqual(CategoryModel.categorize("/x/bindings/tiling.lua").id, "windows")
+  // tiling.lua is not only windows: it also declares every workspace and
+  // monitor binding, so the compositor's own word for the group is the honest
+  // label. "Windows" would also read as the operating system on a panel that
+  // spells SUPER as the Windows key.
+  assert.strictEqual(CategoryModel.categorize("/x/bindings/tiling.lua").id, "tiling")
   assert.strictEqual(CategoryModel.categorize("/x/bindings/utilities.lua").id, "system")
   assert.strictEqual(CategoryModel.categorize("/x/bindings/clipboard.lua").id, "system")
   assert.strictEqual(CategoryModel.categorize("/x/bindings/voxtype.lua").id, "system")
@@ -51,13 +55,13 @@ test("summarize counts bindings per category, busiest first", () => {
   const summary = CategoryModel.summarize(scanMultifile())
   // Ties keep discovery order -- media is declared before homegrown -- so the
   // panel does not reshuffle its rows between scans.
-  assert.deepStrictEqual(summary.map(c => c.id), ["windows", "media", "homegrown"])
+  assert.deepStrictEqual(summary.map(c => c.id), ["tiling", "media", "homegrown"])
   assert.deepStrictEqual(summary.map(c => c.count), [2, 1, 1])
 })
 
 test("summarize labels every category", () => {
   const summary = CategoryModel.summarize(scanMultifile())
-  assert.strictEqual(summary.find(c => c.id === "windows").label, "Windows")
+  assert.strictEqual(summary.find(c => c.id === "tiling").label, "Tiling")
 })
 
 test("categoryOf resolves a binding through its source", () => {

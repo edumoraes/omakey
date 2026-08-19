@@ -105,10 +105,13 @@ Omarchy install that is:
 
 | Category | Bindings |
 | --- | --- |
-| Windows | 100 |
+| Tiling | 100 |
 | System | 72 |
 | Media | 28 |
 | Applications | 28 |
+
+Tiling covers more than windows: `tiling.lua` declares every workspace and
+monitor binding too.
 
 Turning a category off silences its hints without affecting anything else --
 and without spending its counters, so turning it back on starts from where it
