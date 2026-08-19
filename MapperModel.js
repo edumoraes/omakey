@@ -23,7 +23,7 @@ function _normalizeLua(expression) {
 
 function seed(bindings) {
   var out = { workspace: {}, close: -1, fullscreen: {}, floatToggle: -1,
-              byCommand: {}, byLua: {}, panel: {} }
+              byCommand: {}, byLua: {}, panel: {}, special: {} }
 
   for (var i = 0; i < (bindings || []).length; i++) {
     var binding = bindings[i]
@@ -45,6 +45,9 @@ function seed(bindings) {
 
     if (/hl\.dsp\.window\.close\(\)/.test(binding.arg) && out.close < 0) out.close = binding.id
 
+    var special = /hl\.dsp\.workspace\.toggle_special\(\s*"([^"]+)"/.exec(binding.arg)
+    if (special && !(special[1] in out.special)) out.special[special[1]] = binding.id
+
     var mode = /hl\.dsp\.window\.fullscreen\(\{\s*mode\s*=\s*"([^"]+)"/.exec(binding.arg)
     if (mode && !(mode[1] in out.fullscreen)) out.fullscreen[mode[1]] = binding.id
 
@@ -53,6 +56,31 @@ function seed(bindings) {
     }
   }
   return out
+}
+
+// Namespaces that no single binding identifies. Learning one pairs every way in
+// with whichever binding happened to fire first, and every later click then
+// names the wrong key -- verified on 2026-08-19, when clicking the audio widget
+// drew a hint reading SUPER CTRL ALT + D. Silence is the only honest answer.
+var AMBIGUOUS_LAYERS = {
+  // All six bar panels are built on qs.Ui/KeyboardPanel and share its namespace.
+  "omarchy-keyboard-panel": true,
+  // Eight bindings open a menu, and every one of them opens this namespace.
+  "omarchy-menu": true,
+  // Volume, brightness and caps all raise the OSD, and so does a change no key
+  // caused.
+  "omarchy-osd": true,
+  // Raised by an arriving notification, never by a binding. Learning it takes
+  // whatever key was pressed nearby and blames every later notification on it.
+  "omarchy-notifications": true
+}
+
+function _isAmbiguousLayer(namespace) {
+  return AMBIGUOUS_LAYERS[String(namespace || "")] === true
+}
+
+function _pluginIdFromNamespace(namespace) {
+  return String(namespace || "").replace(/-/g, ".")
 }
 
 function _hit(bindingId, actionKey) {
@@ -82,6 +110,15 @@ function resolve(seedMap, learned, promotion) {
   if (effect.name === "changefloatingmode") return _hit(seedMap.floatToggle, "float")
   if (effect.name === "fullscreen") return _hit(seedMap.fullscreen["fullscreen"], "fullscreen")
 
+  // `activespecial>>special:scratchpad,eDP-1` on entry, `activespecial>>,eDP-1`
+  // on exit. The exit carries no name, so only entering a special workspace can
+  // be attributed to a binding.
+  if (effect.name === "activespecial") {
+    var special = String(args[0] || "").replace(/^special:/, "")
+    if (!special) return null
+    return _hit(seedMap.special[special], "special:" + special)
+  }
+
   // Nothing in the string "omarchy-launch-terminal" says which window class it
   // opens, so these two are learned rather than parsed. See learn() below.
   if (effect.name === "openwindow") {
@@ -92,9 +129,13 @@ function resolve(seedMap, learned, promotion) {
 
   if (effect.name === "openlayer") {
     var namespace = String(args[0] || "")
+    if (_isAmbiguousLayer(namespace)) return null
     var learnedLayer = (learned.layer || {})[namespace]
     if (learnedLayer !== undefined) return _hit(learnedLayer, "layer:" + namespace)
-    return null
+    // The panel seed is keyed by plugin id and the event by layer namespace.
+    // Omarchy's panels declare the id with its dots turned into dashes, so the
+    // two meet without waiting for a keypress to teach the pairing.
+    return _hit(seedMap.panel[_pluginIdFromNamespace(namespace)], "layer:" + namespace)
   }
 
   return null
@@ -109,11 +150,15 @@ function learn(learned, bindingId, effect) {
   var source = learned || {}
   var key
   for (key in (source.class || {})) next.class[key] = source.class[key]
-  for (key in (source.layer || {})) next.layer[key] = source.layer[key]
+  for (key in (source.layer || {})) {
+    if (!_isAmbiguousLayer(key)) next.layer[key] = source.layer[key]
+  }
 
   var args = (effect && effect.args) || []
   if (effect && effect.name === "openwindow" && args[2]) next.class[String(args[2])] = bindingId
-  else if (effect && effect.name === "openlayer" && args[0]) next.layer[String(args[0])] = bindingId
+  else if (effect && effect.name === "openlayer" && args[0] && !_isAmbiguousLayer(args[0])) {
+    next.layer[String(args[0])] = bindingId
+  }
   else return source
 
   return next

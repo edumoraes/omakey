@@ -209,10 +209,17 @@ re-verify them if a component is upgraded.
 | `qs.Ui` exports `WidgetButton`/`BarIconButton`, and only a registered click target stops a bar click falling through to the bar's own gestures | An unregistered widget lets a double-click reach the bar background and toggle transparency |
 | `qs.Ui/KeyboardPanel` is what the native bar popups are built on | It primes `WlrKeyboardFocus.Exclusive` then settles on `OnDemand`; a hand-rolled layer surface leaves a stationary second click undelivered until the pointer moves |
 | Every `hl.bind` call is made from `helpers.lua` | Attributing a binding to its own file means walking the stack past it, from level 3 |
+| All six bar panels open under one namespace, `omarchy-keyboard-panel`, and all eight menus under `omarchy-menu` | A shared namespace names no binding. `openlayer` must refuse it rather than learn it — otherwise every panel inherits whichever binding fired first |
+| A panel that declares its own namespace uses the plugin id with dots turned into dashes (`omarchy.clipboard` → `omarchy-clipboard`) | The panel seed resolves those without waiting for a keypress to teach the pairing |
+| `fullscreen>>1` carries the state, never the mode | `mode = "maximized"` cannot be told from `mode = "fullscreen"` on socket2. No mouse path maximises a window, so the gap is theoretical |
+| `activespecial>>special:<name>,<monitor>` on entry, `activespecial>>,<monitor>` on exit | Only entering a special workspace can be attributed to a binding |
+| No binding switches keyboard layout — `kb_layout` is an input setting | `activelayout` fires on its own from the virtual keyboard. It is noise attached to nothing, not a missing detector |
+| `hyprctl dispatch <name> <args>` is refused under the Lua config parser | Driving the compositor by hand needs `hyprctl dispatch '<lua expression>'`, the same form the bar uses |
 | `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
 
-**Still unverified** (spec §12): `hl.timer`'s exact signature, the panel layer
-namespaces, and whether one keypress fires a shadow once or several times.
+**Still unverified** (spec §12): `hl.timer`'s exact signature, and whether one
+keypress fires a shadow once or several times. The panel layer namespaces were
+measured on 2026-08-19 and are in the table above.
 
 Also unverified: whether the correlator's cursor-activity gate can be driven
 synthetically. `hyprctl dispatch movecursor` does not satisfy it, so the

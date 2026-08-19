@@ -452,11 +452,24 @@ effects anyway.
 - Clicking a workspace in the bar — the click produces `workspacev2` with no
   shadow, which is exactly the orphan-effect case. This was the single most
   frequent Tier A path.
-- Opening the audio, bluetooth or network panel by clicking its widget — the
-  panel is a layer-shell surface, so `layer.opened` reports it, and the
-  bindings exist (`SUPER CTRL + A/B/W`).
-- Switching keyboard layout from the bar — `activelayout` is an event; add it
-  to the effect map.
+- Opening the clipboard or emoji panel by clicking it — each declares its own
+  layer namespace, which is the plugin id with its dots turned into dashes, so
+  the panel seed resolves it with no learning at all.
+
+**Corrected 2026-08-19, by measurement.** Two claims this section made before do
+not survive contact with the running desktop:
+
+- *Opening the audio, bluetooth or network panel is reported by `layer.opened`.*
+  It is reported, but not identifiably: all six bar panels are built on
+  `qs.Ui/KeyboardPanel` and open under its single namespace,
+  `omarchy-keyboard-panel`. So does every menu, under `omarchy-menu`. A shared
+  namespace names no binding, and learning one pairs every way in with whichever
+  binding fired first — the live symptom was a hint reading `SUPER CTRL ALT + D`
+  for a click on the audio widget. These namespaces are now refused outright.
+- *Switching keyboard layout from the bar — `activelayout` is an event; add it
+  to the effect map.* No binding switches keyboard layout; `kb_layout` is an
+  input setting, not a dispatcher. The event fires on its own from the virtual
+  keyboard, several times a minute. Adding it would be noise attached to nothing.
 
 **Genuinely lost**: the Omarchy menu. Most of its 20 matching entries produce no
 Hyprland event at all — screenshot, lock, colour picker, keybindings viewer,

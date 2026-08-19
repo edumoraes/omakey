@@ -109,9 +109,11 @@ test("learns a window class from a shadowed open", () => {
   assert.strictEqual(learned.class["Alacritty"], 2)
 })
 
+// A third-party panel, because it is the case learning still has to cover:
+// Omarchy's own panels either resolve from the seed or share one namespace.
 test("learns a layer namespace from a shadowed open", () => {
-  const learned = Mapper.learn({}, 3, { name: "openlayer", args: ["omarchy-audio"] })
-  assert.strictEqual(learned.layer["omarchy-audio"], 3)
+  const learned = Mapper.learn({}, 3, { name: "openlayer", args: ["now-playing"] })
+  assert.strictEqual(learned.layer["now-playing"], 3)
 })
 
 test("learning does not mutate the input", () => {
@@ -123,4 +125,82 @@ test("learning does not mutate the input", () => {
 test("ignores effects that carry no learnable identity", () => {
   const learned = Mapper.learn({}, 2, { name: "closewindow", args: ["0x1"] })
   assert.deepStrictEqual(learned, {})
+})
+
+const SPECIAL = BINDINGS.concat([
+  { id: 4, keys: "SUPER + S", key: "S", modmask: 64, description: "Toggle scratchpad",
+    kind: "lua", arg: 'hl.dsp.workspace.toggle_special("scratchpad")' }
+])
+
+test("seeds special workspaces by name", () => {
+  const seed = Mapper.seed(SPECIAL)
+  assert.strictEqual(seed.special["scratchpad"], 4)
+})
+
+// Hyprland reports `activespecial>>special:scratchpad,eDP-1`, while the binding
+// names the workspace bare. Verified against Hyprland 0.56.2 on 2026-08-19.
+test("resolves an activespecial effect to its toggle binding", () => {
+  const seed = Mapper.seed(SPECIAL)
+  const hit = Mapper.resolve(seed, {}, {
+    tier: "B", command: null,
+    effect: { name: "activespecial", args: ["special:scratchpad", "eDP-1"] }
+  })
+  assert.strictEqual(hit.bindingId, 4)
+  assert.strictEqual(hit.actionKey, "special:scratchpad")
+})
+
+// Leaving a special workspace emits `activespecial>>,eDP-1` -- the name is gone,
+// so there is nothing to attribute the change to.
+test("ignores an activespecial effect that names no workspace", () => {
+  const seed = Mapper.seed(SPECIAL)
+  assert.strictEqual(Mapper.resolve(seed, {}, {
+    tier: "B", command: null, effect: { name: "activespecial", args: ["", "eDP-1"] }
+  }), null)
+})
+
+// The panel seed already holds `omarchy.clipboard` -> binding; the namespace on
+// socket2 is `omarchy-clipboard`. Bridging the two means a first click is
+// promoted, instead of waiting for a keypress to teach the mapping.
+test("resolves a panel layer from the seed without learning it first", () => {
+  const seed = Mapper.seed([{ id: 7, kind: "exec", arg: "omarchy-shell shell toggle omarchy.clipboard" }])
+  const hit = Mapper.resolve(seed, {}, {
+    tier: "B", command: null, effect: { name: "openlayer", args: ["omarchy-clipboard"] }
+  })
+  assert.strictEqual(hit.bindingId, 7)
+  assert.strictEqual(hit.actionKey, "layer:omarchy-clipboard")
+})
+
+// All six bar panels open through qs.Ui/KeyboardPanel and share one namespace,
+// so the event cannot say which panel opened. Verified on 2026-08-19: clicking
+// the audio widget emitted `openlayer>>omarchy-keyboard-panel`.
+test("never resolves the shared keyboard-panel namespace", () => {
+  const seed = Mapper.seed(BINDINGS)
+  const learned = { layer: { "omarchy-keyboard-panel": 3 } }
+  assert.strictEqual(Mapper.resolve(seed, learned, {
+    tier: "B", command: null, effect: { name: "openlayer", args: ["omarchy-keyboard-panel"] }
+  }), null)
+})
+
+test("never learns the shared keyboard-panel namespace", () => {
+  const learned = Mapper.learn({}, 3, { name: "openlayer", args: ["omarchy-keyboard-panel"] })
+  assert.strictEqual((learned.layer || {})["omarchy-keyboard-panel"], undefined)
+})
+
+// Verified on 2026-08-19: `omarchy-menu toggle apps` and `... toggle system`
+// both emitted `openlayer>>omarchy-menu`, and eight bindings open that menu.
+test("never resolves the shared menu namespace", () => {
+  const learned = { layer: { "omarchy-menu": 3 } }
+  assert.strictEqual(Mapper.resolve(Mapper.seed(BINDINGS), learned, {
+    tier: "B", command: null, effect: { name: "openlayer", args: ["omarchy-menu"] }
+  }), null)
+})
+
+// A namespace learned before it was known to be ambiguous is dead weight that
+// copies forward on every later learn. Dropping it on the way through means the
+// state file heals itself instead of carrying the bad pairing indefinitely.
+test("drops an ambiguous namespace already in the learned state", () => {
+  const stale = { layer: { "omarchy-menu": 3, "now-playing": 5 } }
+  const learned = Mapper.learn(stale, 9, { name: "openlayer", args: ["omarchy-emojis"] })
+  assert.strictEqual(learned.layer["omarchy-menu"], undefined)
+  assert.strictEqual(learned.layer["now-playing"], 5)
 })
