@@ -1,83 +1,78 @@
 import QtQuick
 import Quickshell
-import qs.Commons
+import Quickshell.Hyprland
 
+// omakey's service half. It owns the units and wires them together; every
+// decision it makes lives in a plain .js model beside it, so the logic is
+// unit-testable and this file stays I/O and wiring only.
 Item {
   id: root
 
   property var shell: null
+  property var manifest: null
 
-  // Spec section 12 question 1: QML singleton methods may not be reassignable
-  // from JavaScript. Tier A -- 20 Omarchy menu entries and 6 bar call sites --
-  // depends on the answer. Probe it, report it, and leave no trace either way.
-  function probeCommandHook() {
-    var original = null
+  // A plugin is not told where it lives. The registry stamps __sourceDir onto
+  // every manifest it scans (PluginRegistry.qml:564) and the shell hands the
+  // manifest to the service, but only after createObject returns -- so the
+  // resolved URL of this very file is the value available at load.
+  readonly property string pluginPath: {
+    var stamped = root.manifest && root.manifest.__sourceDir ? String(root.manifest.__sourceDir) : ""
+    if (stamped) return stamped.replace(/\/+$/, "")
+    return String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/+$/, "")
+  }
 
-    try {
-      original = Util.execDetached
-    } catch (error) {
-      console.log("omakey: probe: Util.execDetached unreadable:", error)
-      return
+  property string _scannedPath: ""
+
+  // pluginPath resolves while this object is still initialising, which is
+  // before Registry exists to receive it. Nothing may scan until the children
+  // are built.
+  property bool _ready: false
+
+  function start() {
+    if (!root._ready) return
+    if (!root.pluginPath || root.pluginPath === root._scannedPath) return
+    root._scannedPath = root.pluginPath
+    registry.refresh()
+  }
+
+  // hyprctl reload wipes every runtime binding, so a config reload is the one
+  // moment the shadows have to be laid down again -- and the user's bindings
+  // may have changed with it, so the registry is rescanned rather than reused.
+  function reinject() {
+    root._scannedPath = ""
+    root.start()
+  }
+
+  Registry {
+    id: registry
+    pluginPath: root.pluginPath
+    onLoaded: function (bindings) {
+      console.log("omakey: registry loaded", bindings.length, "bindings")
+      injector.apply(bindings)
     }
+    onFailed: function (reason) { console.warn("omakey: registry failed:", reason) }
+  }
 
-    if (typeof original !== "function") {
-      console.log("omakey: probe: Util.execDetached is not a function:", typeof original)
-      return
+  Injector {
+    id: injector
+    onApplied: function (count, skipped) {
+      console.log("omakey: shadow bindings", skipped ? "already present" : ("injected " + count))
     }
+    onFailed: function (reason) { console.warn("omakey: injector failed:", reason) }
+  }
 
-    var called = false
-
-    try {
-      Util.execDetached = function (command) {
-        called = true
-        return original(command)
-      }
-    } catch (error) {
-      console.log("omakey: probe: assignment threw:", error)
-      root.probeAlternatives(original)
-      return
-    }
-
-    var wrapped = Util.execDetached !== original
-    console.log("omakey: probe: assignment kept =", wrapped)
-
-    if (wrapped) {
-      Util.execDetached("true")
-      console.log("omakey: probe: wrapper invoked =", called)
-    }
-
-    try {
-      Util.execDetached = original
-      console.log("omakey: probe: restored =", (Util.execDetached === original))
-    } catch (error) {
-      console.log("omakey: probe: restore threw:", error)
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      if (String(event.name) === "configreloaded") root.reinject()
     }
   }
 
-  // Plain assignment is refused because QML exposes singleton methods as
-  // read-only properties. Two cheaper-than-redesign alternatives, before
-  // declaring tier A unreachable.
-  function probeAlternatives(original) {
-    try {
-      Object.defineProperty(Util, "execDetached", {
-        value: function (command) { return original(command) },
-        writable: true,
-        configurable: true
-      })
-      console.log("omakey: probe: defineProperty kept =", (Util.execDetached !== original))
-    } catch (error) {
-      console.log("omakey: probe: defineProperty threw:", error)
-    }
+  onPluginPathChanged: root.start()
 
-    try {
-      var quickshellOriginal = Quickshell.execDetached
-      Quickshell.execDetached = function (argv) { return quickshellOriginal(argv) }
-      console.log("omakey: probe: Quickshell.execDetached kept =",
-        (Quickshell.execDetached !== quickshellOriginal))
-    } catch (error) {
-      console.log("omakey: probe: Quickshell.execDetached threw:", error)
-    }
+  Component.onCompleted: {
+    root._ready = true
+    console.log("omakey: plugin path", root.pluginPath)
+    root.start()
   }
-
-  Component.onCompleted: probeCommandHook()
 }
