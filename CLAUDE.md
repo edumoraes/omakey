@@ -7,16 +7,20 @@
 
 ## Status
 
-**Designed and planned; no implementation yet.** The repository currently holds
-two documents and nothing else:
+**Designed, planned, and one task in.** The two documents come first:
 
 - `docs/superpowers/specs/2026-08-19-omakey-key-promoter-design.md` — the design,
   including every platform fact that was verified rather than assumed.
 - `docs/superpowers/plans/2026-08-19-omakey.md` — twelve tasks, each ending in a
   tested, committable deliverable.
 
-Read the spec before the plan, and both before writing code. The architecture map
-below describes files the plan *will* create; do not assume any of them exist.
+Task 1 is done: `manifest.json` and a `Service.qml` that exists only to probe
+whether `Util.execDetached` can be wrapped. **It cannot** — see spec §12 and
+§12.1, which also work out what that costs and the product decision it leaves
+open. Nothing else in the architecture map below exists yet; do not assume it
+does.
+
+Read the spec before the plan, and both before writing code.
 
 ---
 
@@ -44,7 +48,11 @@ running desktop or turns the plugin into the thing nobody wants installed.
 5. **English only in this repository** — code, comments, documentation, commit
    messages. The plugin is meant to be published. Conversation with the
    maintainer is in Portuguese; the artifact never is.
-6. **No emojis** in code, docs, or commits unless asked for.
+6. **No symlinks anywhere in the repository.** `omarchy plugin validate` rejects
+   the whole folder if it finds one, and the repository root *is* the plugin
+   folder — `omarchy plugin add` clones it straight into
+   `~/.config/omarchy/plugins/<id>/`.
+7. **No emojis** in code, docs, or commits unless asked for.
 
 ---
 
@@ -61,7 +69,7 @@ directly.
 | `Registry.qml` | Runs `lua/registry.lua` through `Process`, exposes the binding list |
 | `Injector.qml` | Applies the shadow-binding payload through `hyprctl eval` |
 | `Ingest.qml` | socket2 → correlator; also the `record` mode that produces fixtures |
-| `CommandHook.qml` | Wraps `Util.execDetached` to catch menu and bar commands |
+| ~~`CommandHook.qml`~~ | **Cancelled.** It was to wrap `Util.execDetached`; QML refuses the assignment |
 | `Store.qml` | Loads and saves `~/.local/state/omakey/stats.json` |
 | `Toast.qml` | `panel` entry point. The hint UI, layer namespace `omakey-toast` |
 | `RegistryModel.js` | Parse scanner TSV into binding objects |
@@ -98,12 +106,17 @@ on every reload.
 ## Development loop
 
 ```sh
-# Install the working copy as a plugin. Editing the repo reloads the plugin.
+# Install the working copy as a plugin. A symlinked plugin *directory* is fine;
+# symlinks *inside* it are not.
 ln -sfn "$PWD" ~/.config/omarchy/plugins/omakey
+omarchy plugin validate .        # run this before loading; silent on success
 omarchy-shell shell rescanPlugins
-omarchy plugin enable omakey
+omarchy plugin enable omakey     # takes a placement argument, not --yes
 
-omarchy plugin validate .        # the manifest contract; run before loading
+# QML changes need a real restart. rescanPlugins re-instantiates the plugin from
+# Qt's cached compiled QML and will happily re-run stale code.
+omarchy restart shell
+
 node --test tests/               # all logic is plain JS, so this covers it
 journalctl --user -t omarchy-shell -f    # the shell's log, including ours
 
@@ -165,10 +178,12 @@ re-verify them if a component is upgraded.
 | Third-party plugins can `import qs.Commons` | Proven by `~/.config/omarchy/plugins/now-playing` |
 | Bar workspace clicks dispatch the exact registry expression | Matching them is string equality, not heuristics |
 | 20 of 257 Omarchy menu actions string-match a bound command | That is the real tier A menu coverage; normalising prefixes adds nothing |
+| QML singleton methods are read-only; `defineProperty` is silently ignored | `Util.execDetached` cannot be wrapped. Tier A has no in-process hook — see spec §12.1 |
+| `omarchy plugin validate` rejects any symlink inside the plugin folder | And the repository root *is* that folder |
+| `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
 
-**Still unverified** (spec §12): whether a QML singleton method can be reassigned
-from a plugin, `hl.timer`'s exact signature, the panel layer namespaces, and
-whether one keypress fires a shadow once or several times.
+**Still unverified** (spec §12): `hl.timer`'s exact signature, the panel layer
+namespaces, and whether one keypress fires a shadow once or several times.
 
 ---
 

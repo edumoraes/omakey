@@ -383,12 +383,26 @@ makes Tier C defensible over time.
 These must be resolved by spikes before or during implementation. None of them
 invalidates the architecture; each changes one unit.
 
-1. **Can a third-party plugin wrap `Util.execDetached`?** QML singleton methods
-   may not be reassignable from JavaScript. If not, Tier A needs another hook, or
-   an upstream signal. *Blocks Tier A only.*
-2. **Can a third-party plugin `import qs.Commons`?** `PluginRegistry.qml` does, so
-   the module is on the engine's import path, but this is unconfirmed for plugins
-   loaded from `~/.config/omarchy/plugins/`.
+1. **Can a third-party plugin wrap `Util.execDetached`?**
+   **Answered 2026-08-19: no.** All three routes are refused:
+
+   | Attempt | Result |
+   | --- | --- |
+   | `Util.execDetached = fn` | `TypeError: Cannot assign to read-only property "execDetached"` |
+   | `Object.defineProperty(Util, "execDetached", …)` | does not throw, silently ignored |
+   | `Quickshell.execDetached = fn` | `TypeError: Cannot assign to read-only property "execDetached"` |
+
+   QML exposes singleton methods as read-only properties, and `defineProperty`
+   does not reach a QObject's meta-object. **Tier A as designed has no
+   in-process hook.** §9's degradation rule applies: lose Tier A, keep Tiers B
+   and C. What that actually costs is narrower than "Tier A dies", and is worked
+   out in §12.1 below.
+
+2. **Can a third-party plugin `import qs.Commons`?**
+   **Answered: yes.** The installed third-party plugin
+   `~/.config/omarchy/plugins/now-playing` imports both `qs.Commons` and `qs.Ui`,
+   and omakey's own probe resolved `Util` through the same import.
+
 3. **Why did the shadow probe fire six times?** Either the tester pressed
    `ALT+TAB` six times or one press fires the callback more than once. The grace
    window absorbs it either way, but the debounce should be sized against a
@@ -399,6 +413,39 @@ invalidates the architecture; each changes one unit.
    Omarchy's usage, not exercised. The Lua half only needs `hl.bind`, `hl.timer`
    and `hl.get_cursor_pos`, all verified — `hl.on` is currently unused by this
    design.
+
+### 12.1 What losing the command hook actually costs
+
+Less than "Tier A dies", because the busiest paths it covered are visible as
+effects anyway.
+
+**Survives without the hook**, through Tier B:
+
+- Clicking a workspace in the bar — the click produces `workspacev2` with no
+  shadow, which is exactly the orphan-effect case. This was the single most
+  frequent Tier A path.
+- Opening the audio, bluetooth or network panel by clicking its widget — the
+  panel is a layer-shell surface, so `layer.opened` reports it, and the
+  bindings exist (`SUPER CTRL + A/B/W`).
+- Switching keyboard layout from the bar — `activelayout` is an event; add it
+  to the effect map.
+
+**Genuinely lost**: the Omarchy menu. Most of its 20 matching entries produce no
+Hyprland event at all — screenshot, lock, colour picker, keybindings viewer,
+toggle bar, nightlight.
+
+**Partially recoverable without any hook.** Some Omarchy toggles write marker
+files under `~/.local/state/omarchy/toggles/` and
+`~/.local/state/omarchy/indicators/` (`suspend-off` and `stay-awake` exist right
+now), and a `FileView` with `watchChanges` detects those with no hook
+whatsoever. Others leave nothing — `omarchy-toggle-nightlight` drives
+`hyprctl hyprsunset` directly and writes no file. Recovering this way needs a
+per-action audit, and it would be a new detector, not a repair of Tier A.
+
+**This needs a decision before Task 11 is planned**: ship without menu coverage,
+add a state-file detector for the subset that leaves traces, or hold the menu
+half until an upstream signal lands (§13, now clearly justified rather than
+merely tidy).
 
 ## 13. Upstream
 
