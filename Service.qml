@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import "CorrelatorModel.js" as CorrelatorModel
 import "MapperModel.js" as MapperModel
+import "PolicyModel.js" as PolicyModel
 
 // omakey's service half. It owns the units and wires them together; every
 // decision it makes lives in a plain .js model beside it, so the logic is
@@ -62,6 +63,22 @@ Item {
     return entry && (key in entry) ? entry[key] === true : fallback
   }
 
+  function settingInt(key, fallback) {
+    var entry = root.settingsEntry()
+    var value = entry ? Number(entry[key]) : NaN
+    return isFinite(value) ? value : fallback
+  }
+
+  readonly property var policyConfig: ({
+    quietFirst: root.settingInt("quietFirst", 3),
+    learnedAfter: root.settingInt("learnedAfter", 5),
+    giveUpAfter: root.settingInt("giveUpAfter", 5),
+    cooldownMs: root.settingInt("cooldownMs", 60000)
+  })
+
+  // Effect-to-binding seed, rebuilt whenever the registry is rescanned.
+  property var seed: ({})
+
   // 150 ms is long enough to catch a shadow that arrives after its effect;
   // 600 ms is the backward window, sized off a measured 309 ms lead for an
   // exec binding. Spec section 12 question 3 records the measurement.
@@ -97,20 +114,48 @@ Item {
   }
 
   function handlePromotion(promotion) {
-    console.log("omakey: promote", promotion.tier,
-      promotion.command || (promotion.effect && promotion.effect.name))
+    var hit = MapperModel.resolve(root.seed, store.learned || {}, promotion)
+    if (!hit) return
+
+    var result = PolicyModel.recordManual(store.stats || {}, hit.actionKey, Date.now(), root.policyConfig)
+    store.stats = result.stats
+    store.scheduleSave()
+
+    if (!result.show) {
+      console.log("omakey: silent", hit.actionKey, result.reason)
+      return
+    }
+    console.log("omakey: hint", hit.actionKey, hit.bindingId)
   }
 
   // A shadow and an effect arriving together means the keyboard did this, so
   // the binding that fired is the binding that produces this effect. It is the
-  // only signal that ever maps an exec binding.
+  // only signal that ever maps an exec binding -- and it is also adoption: the
+  // user just did with the keyboard the thing omakey would have suggested.
   function handleLesson(lesson) {
     var current = store.learned || {}
     var next = MapperModel.learn(current, lesson.bindingId, lesson.effect)
-    if (next === current) return
-    store.learned = next
+    if (next !== current) {
+      store.learned = next
+      store.scheduleSave()
+      console.log("omakey: learned", lesson.effect.name, "->", lesson.bindingId)
+    }
+
+    var hit = MapperModel.resolve(root.seed, store.learned || {},
+      { tier: "B", command: null, effect: lesson.effect })
+    if (hit) root.handleAdoption(hit.actionKey)
+  }
+
+  // Adoption is what makes a hint fade, and what resets self-demotion.
+  function handleAdoption(actionKey) {
+    store.stats = PolicyModel.recordBind(store.stats || {}, actionKey, Date.now())
     store.scheduleSave()
-    console.log("omakey: learned", lesson.effect.name, "->", lesson.bindingId)
+  }
+
+  function mute(actionKey) {
+    store.stats = PolicyModel.mute(store.stats || {}, actionKey)
+    store.scheduleSave()
+    console.log("omakey: muted", actionKey)
   }
 
   Store { id: store }
@@ -120,6 +165,7 @@ Item {
     pluginPath: root.pluginPath
     onLoaded: function (bindings) {
       console.log("omakey: registry loaded", bindings.length, "bindings")
+      root.seed = MapperModel.seed(bindings)
       injector.apply(bindings)
     }
     onFailed: function (reason) { console.warn("omakey: registry failed:", reason) }
