@@ -82,20 +82,48 @@ in `bar.layout` when the button is on the bar and in `plugins[]` otherwise:
 | `intensity` | `balanced` | How readily omakey speaks. See below. |
 | `toastDuration` | `4000` | How long the hint stays up, in milliseconds. Four stops: `2000`, `4000`, `7000`, `10000`. |
 | `mutedCategories` | `[]` | Categories omakey stays quiet about. |
+| `resetAt` | absent | Set by the panel's reset button. A timestamp newer than the one omakey has already acted on clears everything it has learned. |
 | `cursorIdleMs` | `800` | How recently the cursor must have moved for a window close to count as a mouse action. |
 | `record` | `false` | Development aid: writes every IPC event to `~/.local/state/omakey/stream.jsonl`. |
 
+### How hints space out
+
+omakey schedules each shortcut the way Anki schedules a card, on SM-2 -- minus
+the cards, and minus being asked anything. You never grade yourself: the grade
+is which input device you reached for.
+
+- Use the **keyboard**, and that shortcut is a review you passed. Its next
+  reminder moves further out: one interval, then six of them, then multiplied by
+  an ease factor that itself creeps up with each success. A shortcut you have
+  been getting right for a week is effectively silent.
+- Use the **mouse** after the reminder has come due, and that is a lapse. You
+  get the hint, the shortcut drops back to the first interval, and its ease
+  takes the SM-2 penalty -- so a shortcut that keeps slipping is offered more
+  often than one that stuck the first time.
+- Use the mouse **before** it is due and omakey says nothing. It already told
+  you recently enough.
+
 ### Intensity
 
-One setting instead of four counters, because in practice they move together.
+One setting instead of three counters, because in practice they move together.
 
-| | Silent for the first | Repeats no sooner than | Considers it learned after | Gives up after |
-| --- | --- | --- | --- | --- |
-| `discreet` | 6 uses | 5 minutes | 3 uses | 3 ignored hints |
-| `balanced` | 3 uses | 1 minute | 5 uses | 5 ignored hints |
-| `insistent` | 1 use | 15 seconds | 8 uses | 10 ignored hints |
+| | Silent for the first | First interval | Gives up after |
+| --- | --- | --- | --- |
+| `discreet` | 6 uses | 5 minutes | 3 ignored hints |
+| `balanced` | 3 uses | 1 minute | 5 ignored hints |
+| `insistent` | 1 use | 15 seconds | 10 ignored hints |
 
-`balanced` is what omakey has always done.
+The first interval is the first step of the schedule, so the intensity sets how
+far the whole ladder reaches -- every later interval is built out of it.
+
+### Resetting
+
+The bottom of the panel says how many shortcuts omakey is currently scheduling
+and offers a **Reset learning** button, which takes two clicks. It throws away
+every interval and every counter, so all your shortcuts start over at the
+beginning. What it keeps is omakey's own calibration -- which desktop event
+belongs to which binding -- because that is the plugin's accuracy, not your
+progress.
 
 ### Categories
 
@@ -126,8 +154,9 @@ Right-click a hint to mute that action permanently. Left-click dismisses it.
   no shell profile hooks, no `PATH` changes. Its bindings are injected at
   runtime and disappear on reload.
 - **One state file**, `~/.local/state/omakey/stats.json`, holding what omakey
-  has learned, the counters that let hints fade once you have picked a shortcut
-  up, and the category list the settings panel reads. Delete it to start over.
+  has learned, the schedule that spaces each shortcut's hints out, and the
+  category list the settings panel reads. Delete it to start over -- or use the
+  panel's reset button, which is the same thing without leaving the desktop.
 - **Your preferences**, on omakey's own entry in
   `~/.config/omarchy/shell.json`. That file is Omarchy's, and omakey only ever
   writes its own entry, through the shell's own API.

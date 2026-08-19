@@ -18,7 +18,8 @@ var DEFAULTS = {
   toastPosition: "bottom-center",
   toastDuration: 4000,
   intensity: "balanced",
-  mutedCategories: []
+  mutedCategories: [],
+  resetAt: 0
 }
 
 var SECTIONS = ["left", "center", "right"]
@@ -81,7 +82,11 @@ function read(entry) {
     toastPosition: _oneOf(source.toastPosition, POSITIONS, DEFAULTS.toastPosition),
     intensity: _oneOf(source.intensity, INTENSITIES, DEFAULTS.intensity),
     toastDuration: _oneOfNumber(source.toastDuration, DURATIONS, DEFAULTS.toastDuration),
-    mutedCategories: muted
+    mutedCategories: muted,
+    // When the user last asked omakey to forget what it has learned. The panel
+    // stamps it, the service compares it against the stamp it already applied,
+    // so a reset survives a restart without firing twice.
+    resetAt: isFinite(Number(source.resetAt)) ? Number(source.resetAt) : DEFAULTS.resetAt
   }
 }
 
