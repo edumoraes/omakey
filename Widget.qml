@@ -53,6 +53,7 @@ BarWidget {
 
   function setPosition(position) { root.persist({ toastPosition: position }) }
   function setIntensity(intensity) { root.persist({ intensity: intensity }) }
+  function setHintsEnabled(value) { root.persist({ hintsEnabled: value }) }
   function toggleCategory(categoryId) {
     root.persist({ mutedCategories: SettingsModel.toggleCategory(root.current.mutedCategories, categoryId) })
   }
@@ -74,6 +75,9 @@ BarWidget {
     bar: root.bar
     text: "󰌌"
     active: root.opened
+    // The bar's urgent colour is red, which reads as a warning rather than as
+    // "this panel is open". The glyph stays in the bar foreground instead.
+    useActiveColor: false
     // A muted category is a state the user chose and can forget about, so the
     // icon carries it rather than leaving the bar silent about it.
     dimmed: root.current.mutedCategories.length > 0
@@ -134,7 +138,7 @@ BarWidget {
     // fade. A cosmetic difference, traded for not hinting at itself.
     WlrLayershell.namespace: "omakey-preferences"
 
-    contentWidth: panel.fittedContentWidth(Style.space(300))
+    contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(layout.implicitHeight)
 
     PanelKeyCatcher {
@@ -149,15 +153,33 @@ BarWidget {
         anchors.top: parent.top
         spacing: root.gap
 
-        Text {
-          text: "omakey"
-          color: Color.popups.text
-          font.family: Style.font.family
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
+        Item {
+          width: layout.width
+          implicitHeight: Math.max(title.implicitHeight, masterSwitch.implicitHeight)
+
+          Text {
+            id: title
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            text: "omakey"
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.subtitle
+            font.bold: true
+          }
+
+          // The master switch sits with the title rather than in a section of
+          // its own: it governs everything below, and putting it first says so.
+          ToggleSwitch {
+            id: masterSwitch
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            checked: root.current.hintsEnabled
+            onToggled: root.setHintsEnabled(!root.current.hintsEnabled)
+          }
         }
 
-        SectionLabel { text: "Hint position" }
+        SectionLabel { text: "Hint position"; opacity: root.current.hintsEnabled ? 0.6 : 0.3 }
 
         Grid {
           columns: 3
@@ -172,7 +194,7 @@ BarWidget {
           }
         }
 
-        SectionLabel { text: "How much it speaks" }
+        SectionLabel { text: "How much it speaks"; opacity: root.current.hintsEnabled ? 0.6 : 0.3 }
 
         Row {
           spacing: Style.space(4)
@@ -186,7 +208,7 @@ BarWidget {
           }
         }
 
-        SectionLabel { text: "Categories" }
+        SectionLabel { text: "Categories"; opacity: root.current.hintsEnabled ? 0.6 : 0.3 }
 
         Text {
           visible: root.categories.length === 0
@@ -204,6 +226,7 @@ BarWidget {
             label: modelData.label
             count: modelData.count
             muted: CategoryModel.isMuted(root.current.mutedCategories, modelData.id)
+            interactive: root.current.hintsEnabled
             onToggled: root.toggleCategory(modelData.id)
           }
         }
@@ -252,47 +275,41 @@ BarWidget {
     property string label: ""
     property int count: 0
     property bool muted: false
+    property bool interactive: true
     signal toggled()
 
-    implicitHeight: rowText.implicitHeight + Style.space(8)
-
-    Rectangle {
-      anchors.verticalCenter: parent.verticalCenter
-      anchors.left: parent.left
-      width: Style.space(10)
-      height: Style.space(10)
-      radius: width / 2
-      color: row.muted ? "transparent" : Color.popups.text
-      border.color: Color.popups.border
-      border.width: Math.max(1, Style.space(1))
-    }
+    implicitHeight: Math.max(rowText.implicitHeight, rowSwitch.implicitHeight) + Style.space(4)
 
     Text {
       id: rowText
       anchors.verticalCenter: parent.verticalCenter
       anchors.left: parent.left
-      anchors.leftMargin: Style.space(18)
       text: row.label
       color: Color.popups.text
-      opacity: row.muted ? 0.5 : 1.0
+      opacity: row.interactive ? (row.muted ? 0.5 : 1.0) : 0.3
       font.family: Style.font.family
-      font.pixelSize: Style.font.bodySmall
+      font.pixelSize: Style.font.body
     }
 
     Text {
       id: countText
       anchors.verticalCenter: parent.verticalCenter
-      anchors.right: parent.right
+      anchors.right: rowSwitch.left
+      anchors.rightMargin: Style.space(10)
       text: String(row.count)
       color: Color.popups.text
-      opacity: 0.5
+      opacity: row.interactive ? 0.5 : 0.3
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
 
-    MouseArea {
-      anchors.fill: parent
-      onClicked: row.toggled()
+    ToggleSwitch {
+      id: rowSwitch
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.right: parent.right
+      checked: !row.muted
+      interactive: row.interactive
+      onToggled: row.toggled()
     }
   }
 }

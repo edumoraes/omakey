@@ -149,6 +149,11 @@ Item {
   }
 
   function handlePromotion(promotion) {
+    // The master switch, ahead of everything else. Like the category gate, it
+    // returns before recordManual so a disabled plugin spends no counters and
+    // switching it back on resumes rather than restarts.
+    if (!root.settings.hintsEnabled) return
+
     var allowed = promotion.tier === "A" ? root.tiers.commands : root.tiers.effects
     if (!allowed) return
 

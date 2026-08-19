@@ -60,8 +60,12 @@ so reloading always returns Hyprland to exactly what your own config says.
 ## Settings
 
 Click the omakey button on the bar. It opens a panel with everything below --
-where hints appear, how much omakey speaks, and which categories it speaks
-about.
+a master switch, where hints appear, how much omakey speaks, and which
+categories it speaks about.
+
+Turning omakey off leaves its counters untouched, so switching it back on
+resumes where it left off rather than starting over. The same is true of an
+individual category.
 
 Everything is stored as inline fields on omakey's entry in
 `~/.config/omarchy/shell.json`, so it can also be edited by hand. The entry is
@@ -73,6 +77,7 @@ in `bar.layout` when the button is on the bar and in `plugins[]` otherwise:
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `hintsEnabled` | `true` | The master switch. Turn it off and omakey stays silent without forgetting anything it has learned. |
 | `toastPosition` | `bottom-center` | Which corner or edge the hint appears at: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`. |
 | `intensity` | `balanced` | How readily omakey speaks. See below. |
 | `mutedCategories` | `[]` | Categories omakey stays quiet about. |

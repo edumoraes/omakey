@@ -9,6 +9,7 @@ var POSITIONS = [
 var INTENSITIES = ["discreet", "balanced", "insistent"]
 
 var DEFAULTS = {
+  hintsEnabled: true,
   toastPosition: "bottom-center",
   intensity: "balanced",
   mutedCategories: []
@@ -60,6 +61,10 @@ function read(entry) {
     }
   }
   return {
+    // Only an explicit false turns the plugin off. Anything else -- a missing
+    // key, a string, a null -- leaves it speaking, because silently disabling
+    // itself is indistinguishable from being broken.
+    hintsEnabled: source.hintsEnabled !== false,
     toastPosition: _oneOf(source.toastPosition, POSITIONS, DEFAULTS.toastPosition),
     intensity: _oneOf(source.intensity, INTENSITIES, DEFAULTS.intensity),
     mutedCategories: muted

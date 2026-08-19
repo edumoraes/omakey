@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
+import "ToastModel.js" as ToastModel
 
 // The hint itself. Summoned by the service through shell.summon("omakey", ...),
 // which queues the payload and calls open() on this item.
@@ -19,9 +20,6 @@ Item {
   property string actionKey: ""
   property string position: "bottom-center"
   property int duration: 4000
-
-  readonly property bool atTop: root.position.indexOf("top-") === 0
-  readonly property string side: root.position.replace(/^(top|bottom)-/, "")
 
   readonly property int pad: Style.space(16)
 
@@ -71,15 +69,14 @@ Item {
     Rectangle {
       id: card
 
-      // Anchoring is set rather than bound because only one of each axis pair
-      // may be active at a time: leaving a stale `top` set while assigning
-      // `bottom` stretches the card across the screen.
-      anchors.top: root.atTop ? parent.top : undefined
-      anchors.bottom: root.atTop ? undefined : parent.bottom
-      anchors.left: root.side === "left" ? parent.left : undefined
-      anchors.right: root.side === "right" ? parent.right : undefined
-      anchors.horizontalCenter: root.side === "center" ? parent.horizontalCenter : undefined
-      anchors.margins: Style.space(67)
+      // Placed by arithmetic, not by anchors. See ToastModel: an anchor line
+      // cannot be cleared by assigning undefined, so the ternary form left both
+      // members of an axis bound, sized the card negative, and leaked the
+      // leftover anchors into the next position shown.
+      readonly property var origin: ToastModel.origin(root.position,
+        parent.width, parent.height, width, height, Style.space(67))
+      x: origin.x
+      y: origin.y
 
       radius: Style.cornerRadius
       color: Color.popups.background

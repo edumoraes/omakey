@@ -98,3 +98,16 @@ test("the state path has a single definition", () => {
   assert.strictEqual(Settings.stateDir("/home/me"), "/home/me/.local/state/omakey")
   assert.strictEqual(Settings.stateFile("/home/me"), "/home/me/.local/state/omakey/stats.json")
 })
+
+// The master switch. It defaults to on, because a plugin that installs itself
+// silent is a plugin the user thinks is broken.
+test("hints are enabled unless the entry says otherwise", () => {
+  assert.strictEqual(Settings.read(null).hintsEnabled, true)
+  assert.strictEqual(Settings.read({}).hintsEnabled, true)
+  assert.strictEqual(Settings.read({ hintsEnabled: false }).hintsEnabled, false)
+})
+
+test("a non-boolean hintsEnabled does not silence the plugin by accident", () => {
+  assert.strictEqual(Settings.read({ hintsEnabled: "false" }).hintsEnabled, true)
+  assert.strictEqual(Settings.read({ hintsEnabled: null }).hintsEnabled, true)
+})

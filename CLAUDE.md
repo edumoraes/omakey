@@ -92,6 +92,7 @@ directly.
 | `PolicyModel.js` | Adaptive policy, counters, tier gating, intensity presets |
 | `SettingsModel.js` | shell.json entry precedence, defaults, normalisation |
 | `CategoryModel.js` | Source file to category, with a fallback for unknown files |
+| `ToastModel.js` | Where the hint card sits. Arithmetic, because anchors cannot be cleared |
 | `lua/registry.lua` | Binding scanner: stubbed-`hl` sandbox over the user's config |
 | `lua/cursor.lua` | Cursor activity poller payload |
 | `tests/` | `node --test` unit tests and recorded socket2 fixtures |
@@ -204,6 +205,9 @@ re-verify them if a component is upgraded.
 | `barWidget.schema[]` is stored at `shell.qml:696` and never rendered | Declaring it is free; it builds no UI |
 | A bar widget is injected `bar`, `moduleName`, `settings` — never `service` | Service-to-widget data has to go through a file or shell.json |
 | `Bar.qml:25` exposes `property var shell` | `bar.shell.updateEntryInline` is how a widget persists its own settings |
+| An anchor line cannot be cleared by assigning `undefined` | A ternary anchor leaves both members of an axis bound: the item sizes negative and paints nothing, and the stale anchor leaks into the next state. Position with `x`/`y` instead |
+| `qs.Ui` exports `WidgetButton`/`BarIconButton`, and only a registered click target stops a bar click falling through to the bar's own gestures | An unregistered widget lets a double-click reach the bar background and toggle transparency |
+| `qs.Ui/KeyboardPanel` is what the native bar popups are built on | It primes `WlrKeyboardFocus.Exclusive` then settles on `OnDemand`; a hand-rolled layer surface leaves a stationary second click undelivered until the pointer moves |
 | Every `hl.bind` call is made from `helpers.lua` | Attributing a binding to its own file means walking the stack past it, from level 3 |
 | `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
 
