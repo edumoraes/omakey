@@ -1,4 +1,7 @@
 # Recorded from the live compositor on 2026-08-19 through Ingest.qml's recorder.
+# One field is not verbatim: the `activewindow` title was a real browser tab, so
+# it reads "A web page - Chromium" here. Nothing keys on it -- activewindow is
+# not in the effect map -- so the replay is unaffected.
 # Lines beginning with # are annotation and are not JSON; the loader skips them.
 #
 # Phases are delimited by `custom omakeyfixture,<phase>` marker events, injected

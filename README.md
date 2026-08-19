@@ -23,7 +23,7 @@ would have been faster.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/<owner>/omakey.git --enable
+omarchy plugin add https://github.com/edumoraes/omakey.git --enable
 ```
 
 ## Uninstall
