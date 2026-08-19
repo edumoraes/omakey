@@ -8,7 +8,9 @@
 ## Status
 
 **All twelve plan tasks are implemented and verified against the running
-desktop.** The two documents still come first:
+desktop**, and the plugin is documented for publication: `README.md` is the
+user- and marketplace-facing document, with screenshots in `docs/images/`. The
+two design documents still come first:
 
 - `docs/superpowers/specs/2026-08-19-omakey-key-promoter-design.md` — the design,
   including every platform fact that was verified rather than assumed.
@@ -84,7 +86,7 @@ directly.
 | ~~`CommandHook.qml`~~ | **Cancelled.** It was to wrap `Util.execDetached`; QML refuses the assignment |
 | `Store.qml` | Loads and saves `~/.local/state/omakey/stats.json` |
 | `Toast.qml` | `panel` entry point. The hint UI, layer namespace `omakey-toast` |
-| `Widget.qml` | `bar-widget` entry point. The preferences panel. **Not** `BarWidget.qml` — `qs.Ui` exports a type by that name and a local file would shadow the base it extends |
+| `Widget.qml` | `bar-widget` entry point. The preferences panel, layer namespace `omakey-preferences`. **Not** `BarWidget.qml` — `qs.Ui` exports a type by that name and a local file would shadow the base it extends |
 | `RegistryModel.js` | Parse scanner TSV into binding objects |
 | `PayloadModel.js` | Build the Lua payload for `hyprctl eval` |
 | `CorrelatorModel.js` | Grace window, three-input decision |
@@ -141,6 +143,20 @@ journalctl --user -t omarchy-shell -f    # the shell's log, including ours
 hyprctl reload                   # removes every injected binding
 hyprctl binds | grep -c '^bind'  # 228 clean; roughly doubled once injected
 ```
+
+Reproducing a hint without touching the mouse — a dispatched effect carries no
+shadow, so the correlator reads it exactly as it reads a click:
+
+```sh
+hyprctl dispatch 'hl.dsp.focus({ workspace = "4" })'   # promotes workspace:4
+omarchy-shell shell toggle omarchy.clock               # promotes the clock panel
+grim -o eDP-1 shot.png                                 # the toast dwells 4 s by default
+journalctl --user -t omarchy-shell --since '-15s' | grep -o 'omakey: .*'
+```
+
+The README's screenshots live in `docs/images/` and were produced this way. The
+preferences panel is the exception: no IPC opens it (see the table below), so it
+was captured with a temporary `opened = true` in `Widget.qml`, reverted after.
 
 Useful introspection, all read-only:
 
@@ -221,12 +237,15 @@ re-verify them if a component is upgraded.
 | No binding switches keyboard layout — `kb_layout` is an input setting | `activelayout` fires on its own from the virtual keyboard. It is noise attached to nothing, not a missing detector |
 | `hyprctl dispatch <name> <args>` is refused under the Lua config parser | Driving the compositor by hand needs `hyprctl dispatch '<lua expression>'`, the same form the bar uses |
 | `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
+| `shell.summon` routes a plugin declaring `panel` **and** `bar-widget` to the panel loader (`isBarWidgetPanelPlugin` returns false once any loader kind is present) | `omarchy-shell shell toggle omakey` opens the *toast*, never the preferences panel. There is no IPC that opens it: a screenshot needs a real click, or a temporary `opened = true` in `Widget.qml` plus `omarchy restart shell` |
+| `hyprctl dispatch '<lua>'` produces the effect with no shadow beside it | It is indistinguishable from the mouse to the correlator, which is how a hint is reproduced without a pointer: `hyprctl dispatch 'hl.dsp.focus({ workspace = "4" })'` promotes `workspace:4` |
 
-**Still unverified** (spec §12): `hl.timer`'s exact signature, and whether one
-keypress fires a shadow once or several times. The panel layer namespaces were
-measured on 2026-08-19 and are in the table above.
+Both of spec §12's open questions are now closed: `hl.timer`'s real signature is
+recorded at `lua/cursor.lua:6`, and one keypress fires its shadow exactly once.
+The panel layer namespaces were measured on 2026-08-19 and are in the table
+above.
 
-Also unverified: whether the correlator's cursor-activity gate can be driven
+Still unverified: whether the correlator's cursor-activity gate can be driven
 synthetically. `hyprctl dispatch movecursor` does not satisfy it, so the
 category gate is covered by unit tests rather than by an observed live
 suppression. Testing it end to end needs a real pointer device.
