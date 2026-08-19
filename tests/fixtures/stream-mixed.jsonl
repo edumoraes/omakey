@@ -1,0 +1,56 @@
+# Recorded from the live compositor on 2026-08-19 through Ingest.qml's recorder.
+# Lines beginning with # are annotation and are not JSON; the loader skips them.
+#
+# Phases are delimited by `custom omakeyfixture,<phase>` marker events, injected
+# with `hyprctl eval 'hl.dispatch(hl.dsp.event("omakeyfixture,<phase>"))'`.
+# They are inert: the correlator keys on args[0] == "omakey", not "omakeyfixture".
+#
+#   keyboard-menu-*    SUPER+ESCAPE pressed twice on a real keyboard (wtype).
+#                      Each press emits `custom omakey,139` first, and the
+#                      openlayer/closelayer follows 309 ms and 128 ms later --
+#                      binding 139 is `exec omarchy-menu toggle system`, so the
+#                      gap is the menu process starting. THE SHADOW LEADS THE
+#                      EFFECT, and by far more than a 150 ms window.
+#   mouse-menu-*       the same command run directly, the way Util.execDetached
+#                      runs it for a menu or bar click. No shadow anywhere.
+#   mouse-workspace-*  workspace 4 and back, dispatched -- what a bar workspace
+#                      click does. No shadow anywhere.
+#
+# Expected promotions when replayed: 3
+#   openlayer omarchy-menu   at 1787161716338  (mouse)
+#   workspacev2 4            at 1787161722237  (mouse)
+#   workspacev2 2            at 1787161724245  (mouse)
+# Expected suppressions: 1
+#   openlayer omarchy-menu   at 1787161710401  (keyboard, shadow at ...710092)
+{"name":"custom","args":["omakeyfixture","keyboard-menu-begin","","","","","",""],"at":1787161709057}
+{"name":"activelayout","args":["hl-virtual-keyboard-wtype","Portuguese (Brazil)","","","","","",""],"at":1787161710084}
+{"name":"activelayout","args":["hl-virtual-keyboard-wtype","error","","","","","",""],"at":1787161710086}
+{"name":"custom","args":["omakey","139","","","","","",""],"at":1787161710092}
+{"name":"openlayer","args":["omarchy-menu","","","","","","",""],"at":1787161710401}
+{"name":"activelayout","args":["hl-virtual-keyboard-wtype","Portuguese (Brazil)","","","","","",""],"at":1787161712116}
+{"name":"activelayout","args":["hl-virtual-keyboard-wtype","error","","","","","",""],"at":1787161712119}
+{"name":"custom","args":["omakey","139","","","","","",""],"at":1787161712123}
+{"name":"closelayer","args":["omarchy-menu","","","","","","",""],"at":1787161712251}
+{"name":"activewindow","args":["chromium","A web page - Chromium","","","","","",""],"at":1787161712251}
+{"name":"activewindowv2","args":["55ba0ae078a0","","","","","","",""],"at":1787161712251}
+{"name":"custom","args":["omakeyfixture","keyboard-menu-end","","","","","",""],"at":1787161714147}
+{"name":"custom","args":["omakeyfixture","mouse-menu-begin","","","","","",""],"at":1787161715161}
+{"name":"openlayer","args":["omarchy-menu","","","","","","",""],"at":1787161716338}
+{"name":"closelayer","args":["omarchy-menu","","","","","","",""],"at":1787161718266}
+{"name":"activewindow","args":["chromium","A web page - Chromium","","","","","",""],"at":1787161718267}
+{"name":"activewindowv2","args":["55ba0ae078a0","","","","","","",""],"at":1787161718267}
+{"name":"custom","args":["omakeyfixture","mouse-menu-end","","","","","",""],"at":1787161720196}
+{"name":"custom","args":["omakeyfixture","mouse-workspace-begin","","","","","",""],"at":1787161721213}
+{"name":"createworkspace","args":["4","","","","","","",""],"at":1787161722230}
+{"name":"createworkspacev2","args":["4","4","","","","","",""],"at":1787161722231}
+{"name":"activewindow","args":["","","","","","","",""],"at":1787161722232}
+{"name":"activewindowv2","args":["","","","","","","",""],"at":1787161722232}
+{"name":"workspace","args":["4","","","","","","",""],"at":1787161722232}
+{"name":"workspacev2","args":["4","4","","","","","",""],"at":1787161722237}
+{"name":"activewindow","args":["chromium","A web page - Chromium","","","","","",""],"at":1787161724244}
+{"name":"activewindowv2","args":["55ba0ae078a0","","","","","","",""],"at":1787161724244}
+{"name":"workspace","args":["2","","","","","","",""],"at":1787161724244}
+{"name":"workspacev2","args":["2","2","","","","","",""],"at":1787161724245}
+{"name":"destroyworkspace","args":["4","","","","","","",""],"at":1787161724246}
+{"name":"destroyworkspacev2","args":["4","4","","","","","",""],"at":1787161724246}
+{"name":"custom","args":["omakeyfixture","mouse-workspace-end","","","","","",""],"at":1787161726258}

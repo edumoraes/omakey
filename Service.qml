@@ -43,6 +43,29 @@ Item {
     root.start()
   }
 
+  // The shell exposes no per-plugin settings accessor. Settings are inline
+  // fields on the plugin's own entry in shell.json's plugins[] array -- see
+  // "Storage rules" in /usr/share/omarchy/shell/README.md.
+  function settingsEntry() {
+    var config = root.shell && root.shell.shellConfig ? root.shell.shellConfig : null
+    var entries = config && Array.isArray(config.plugins) ? config.plugins : []
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && String(entries[i].id) === "omakey") return entries[i]
+    }
+    return null
+  }
+
+  function settingBool(key, fallback) {
+    var entry = root.settingsEntry()
+    return entry && (key in entry) ? entry[key] === true : fallback
+  }
+
+  Ingest {
+    id: ingest
+    recording: root.settingBool("record", false)
+    onRecordingChanged: console.log("omakey: recording", recording ? "on" : "off")
+  }
+
   Registry {
     id: registry
     pluginPath: root.pluginPath

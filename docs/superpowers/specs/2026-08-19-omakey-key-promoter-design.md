@@ -404,12 +404,36 @@ invalidates the architecture; each changes one unit.
    `~/.config/omarchy/plugins/now-playing` imports both `qs.Commons` and `qs.Ui`,
    and omakey's own probe resolved `Util` through the same import.
 
-3. **Why did the shadow probe fire six times?** Either the tester pressed
-   `ALT+TAB` six times or one press fires the callback more than once. The grace
-   window absorbs it either way, but the debounce should be sized against a
-   measurement, not a guess.
-4. **Panel layer namespaces** for audio/bluetooth/network are unverified; only
-   `omarchy-background` and `omarchy-bar` were observed live.
+3. **Why did the shadow probe fire six times?**
+   **Answered 2026-08-19: it was six presses.** One keypress fires its shadow
+   exactly once. Measured by pressing `SUPER + ESCAPE` four times through a
+   virtual keyboard while reading socket2 directly: four presses, four
+   `custom>>omakey,139` lines, one each. The grace window does not have to
+   absorb a repeat.
+
+   The same measurement produced a finding that does change a unit. **The
+   shadow leads the effect, and by more than the 150 ms the plan assumed.**
+
+   | Press | shadow at | effect at | lead |
+   | --- | --- | --- | --- |
+   | open the system menu | `…710092` | `openlayer` `…710401` | **309 ms** |
+   | close it again | `…712123` | `closelayer` `…712251` | **128 ms** |
+
+   Binding 139 is `exec omarchy-menu toggle system`, so the gap is the menu
+   process starting; the first press pays a cold start, the second does not. A
+   symmetric 150 ms window would have failed to suppress a keyboard-driven menu
+   open — a false positive on exactly the action the user just performed
+   correctly.
+
+   The window is therefore split rather than widened. Effects are held only
+   `graceMs` (150 ms) before promoting, because a shadow that leads needs no
+   hold at all; suppression looks back `shadowMs` (600 ms) for a preceding
+   shadow. Holding longer would delay every hint; looking back further only
+   errs toward silence, which is the direction §9 requires. Recorded as
+   `tests/fixtures/stream-mixed.jsonl`.
+4. **Panel layer namespaces** for audio/bluetooth/network are still unverified.
+   `omarchy-background`, `omarchy-bar` and `omarchy-menu` have been observed
+   live.
 5. **`hl.on` signature and runtime behaviour** are inferred from binary strings and
    Omarchy's usage, not exercised. The Lua half only needs `hl.bind`, `hl.timer`
    and `hl.get_cursor_pos`, all verified — `hl.on` is currently unused by this
