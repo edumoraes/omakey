@@ -6,7 +6,13 @@
   "author": "Eduardo de Moraes",
   "license": "MIT",
   "description": "Shows the keybinding you could have pressed instead of using the mouse",
-  "kinds": ["service"],
+  "kinds": [
+    "service",
+    "panel"
+  ],
   "keepLoaded": true,
-  "entryPoints": { "service": "Service.qml" }
+  "entryPoints": {
+    "service": "Service.qml",
+    "panel": "Toast.qml"
+  }
 }

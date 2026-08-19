@@ -54,3 +54,24 @@ test("parseRegistry skips malformed lines instead of throwing", () => {
   assert.strictEqual(bindings.length, 1)
   assert.strictEqual(bindings[0].id, 0)
 })
+
+// Hyprland reports the number row as keycodes, so a raw label would read
+// "SUPER + code:12" -- useless as an instruction. Omarchy's own menu resolves
+// these; this is its fallback table, which covers every code: binding in the
+// default config that omakey can ever promote.
+test("comboLabel resolves number-row keycodes", () => {
+  assert.strictEqual(RegistryModel.comboLabel({ modmask: 64, key: "code:12" }), "SUPER + 3")
+  assert.strictEqual(RegistryModel.comboLabel({ modmask: 64, key: "code:19" }), "SUPER + 0")
+  assert.strictEqual(RegistryModel.comboLabel({ modmask: 64, key: "code:20" }), "SUPER + MINUS")
+})
+
+test("comboLabel names mouse buttons", () => {
+  assert.strictEqual(
+    RegistryModel.comboLabel({ modmask: 64, key: "mouse:272" }),
+    "SUPER + LEFT MOUSE BUTTON"
+  )
+})
+
+test("comboLabel leaves an unknown keycode alone rather than inventing one", () => {
+  assert.strictEqual(RegistryModel.comboLabel({ modmask: 64, key: "code:201" }), "SUPER + code:201")
+})

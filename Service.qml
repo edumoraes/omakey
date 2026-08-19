@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import "CorrelatorModel.js" as CorrelatorModel
 import "MapperModel.js" as MapperModel
 import "PolicyModel.js" as PolicyModel
+import "RegistryModel.js" as RegistryModel
 
 // omakey's service half. It owns the units and wires them together; every
 // decision it makes lives in a plain .js model beside it, so the logic is
@@ -125,7 +126,21 @@ Item {
       console.log("omakey: silent", hit.actionKey, result.reason)
       return
     }
-    console.log("omakey: hint", hit.actionKey, hit.bindingId)
+    root.showHint(hit)
+  }
+
+  function showHint(hit) {
+    var binding = registry.bindings[hit.bindingId]
+    if (!binding) return
+    if (!root.shell || typeof root.shell.summon !== "function") return
+
+    var combo = RegistryModel.comboLabel(binding)
+    console.log("omakey: hint", hit.actionKey, combo)
+    root.shell.summon("omakey", JSON.stringify({
+      combo: combo,
+      description: binding.description || "",
+      actionKey: hit.actionKey
+    }))
   }
 
   // A shadow and an effect arriving together means the keyboard did this, so
