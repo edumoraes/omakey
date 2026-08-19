@@ -1,0 +1,95 @@
+// Reads omakey's preferences off its shell.json entry, and normalises whatever
+// it finds there into values the rest of the plugin can use without checking.
+
+var POSITIONS = [
+  "top-left", "top-center", "top-right",
+  "bottom-left", "bottom-center", "bottom-right"
+]
+
+var INTENSITIES = ["discreet", "balanced", "insistent"]
+
+var DEFAULTS = {
+  toastPosition: "bottom-center",
+  intensity: "balanced",
+  mutedCategories: []
+}
+
+var SECTIONS = ["left", "center", "right"]
+
+// Mirrors PluginRegistry.findEntryLocation: the bar layout first, plugins[]
+// second. A plugin has exactly one entry, and shell.updateEntryInline picks it
+// with this same precedence -- so reading it any other way would have the panel
+// saving into one object while the service read another.
+function resolveEntry(shellConfig, id) {
+  var config = shellConfig || null
+  if (!config) return null
+  var key = String(id || "omakey")
+
+  var layout = config.bar && config.bar.layout ? config.bar.layout : null
+  if (layout) {
+    for (var s = 0; s < SECTIONS.length; s++) {
+      var section = layout[SECTIONS[s]]
+      if (!Array.isArray(section)) continue
+      for (var i = 0; i < section.length; i++) {
+        if (section[i] && String(section[i].id) === key) return section[i]
+      }
+    }
+  }
+
+  if (Array.isArray(config.plugins)) {
+    for (var j = 0; j < config.plugins.length; j++) {
+      if (config.plugins[j] && String(config.plugins[j].id) === key) return config.plugins[j]
+    }
+  }
+
+  return null
+}
+
+function _oneOf(value, allowed, fallback) {
+  return allowed.indexOf(String(value)) === -1 ? fallback : String(value)
+}
+
+// A malformed value must not leave the toast unanchored or the policy
+// undefined, so every field falls back rather than propagating.
+function read(entry) {
+  var source = entry || {}
+  var muted = []
+  if (Array.isArray(source.mutedCategories)) {
+    for (var i = 0; i < source.mutedCategories.length; i++) {
+      if (typeof source.mutedCategories[i] === "string") muted.push(source.mutedCategories[i])
+    }
+  }
+  return {
+    toastPosition: _oneOf(source.toastPosition, POSITIONS, DEFAULTS.toastPosition),
+    intensity: _oneOf(source.intensity, INTENSITIES, DEFAULTS.intensity),
+    mutedCategories: muted
+  }
+}
+
+function toggleCategory(mutedCategories, categoryId) {
+  var current = Array.isArray(mutedCategories) ? mutedCategories : []
+  var next = []
+  var found = false
+  for (var i = 0; i < current.length; i++) {
+    if (current[i] === categoryId) found = true
+    else next.push(current[i])
+  }
+  if (!found) next.push(categoryId)
+  return next
+}
+
+// updateEntryInline rewrites the whole entry from what it is handed, so
+// anything on it that this plugin does not know about -- `record`, a field a
+// later version adds -- has to be carried across or it is deleted.
+function merge(entry, changes) {
+  var out = {}
+  var key
+  for (key in (entry || {})) out[key] = entry[key]
+  for (key in (changes || {})) out[key] = changes[key]
+  return out
+}
+
+if (typeof module !== "undefined") module.exports = {
+  POSITIONS: POSITIONS, INTENSITIES: INTENSITIES, DEFAULTS: DEFAULTS,
+  resolveEntry: resolveEntry, read: read, toggleCategory: toggleCategory, merge: merge
+}

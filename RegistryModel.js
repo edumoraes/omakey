@@ -37,6 +37,8 @@ function parseRegistry(text) {
   var lines = String(text || "").split("\n")
   for (var i = 0; i < lines.length; i++) {
     var fields = lines[i].split("\t")
+    // Six fields is the pre-source format. Such a line still parses; its
+    // binding simply has no category rather than being dropped.
     if (fields.length < 6) continue
     var modmask = parseInt(fields[1], 10)
     if (!isFinite(modmask)) continue
@@ -47,7 +49,8 @@ function parseRegistry(text) {
       key: fields[2],
       description: fields[3],
       kind: fields[4],
-      arg: fields.slice(5).join("\t")
+      arg: fields[5],
+      source: fields[6] || ""
     })
   }
   return bindings

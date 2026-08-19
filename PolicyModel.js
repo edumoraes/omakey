@@ -1,8 +1,29 @@
 // Decides whether the user should actually be told. A Key Promoter's failure
 // mode is being uninstalled for nagging, so every rule here exists to say less.
 
+// One knob instead of four. A user who wants fewer hints wants a longer
+// cooldown *and* an earlier give-up; asking them to reason about the counters
+// separately is asking them to reason about the correlator.
+var PRESETS = {
+  discreet: { quietFirst: 6, learnedAfter: 3, giveUpAfter: 3, cooldownMs: 300000 },
+  balanced: { quietFirst: 3, learnedAfter: 5, giveUpAfter: 5, cooldownMs: 60000 },
+  insistent: { quietFirst: 1, learnedAfter: 8, giveUpAfter: 10, cooldownMs: 15000 }
+}
+
+function _copy(config) {
+  return { quietFirst: config.quietFirst, learnedAfter: config.learnedAfter,
+           giveUpAfter: config.giveUpAfter, cooldownMs: config.cooldownMs }
+}
+
+// balanced is exactly the behaviour that shipped, so the default preset changes
+// nothing for anyone already running the plugin.
 function defaults() {
-  return { quietFirst: 3, learnedAfter: 5, giveUpAfter: 5, cooldownMs: 60000 }
+  return _copy(PRESETS.balanced)
+}
+
+function configFor(intensity) {
+  var preset = PRESETS[String(intensity)]
+  return _copy(preset || PRESETS.balanced)
 }
 
 function _entry(stats, key) {
@@ -82,5 +103,5 @@ function tiersEnabled(capabilities) {
 
 if (typeof module !== "undefined") module.exports = {
   defaults: defaults, recordManual: recordManual, recordBind: recordBind,
-  mute: mute, tiersEnabled: tiersEnabled
+  mute: mute, tiersEnabled: tiersEnabled, configFor: configFor
 }
