@@ -7,6 +7,7 @@ const path = require("node:path")
 const RegistryModel = require("../RegistryModel.js")
 
 const FIXTURE = path.join(__dirname, "fixtures", "side-effects.lua")
+const ESCAPES = path.join(__dirname, "fixtures", "sandbox-escapes.lua")
 const SCANNER = path.join(__dirname, "..", "lua", "registry.lua")
 
 // The config is the user's own and Hyprland already runs it, so the danger is
@@ -98,4 +99,49 @@ test("a config that cannot be read fails the scan", () => {
     { encoding: "utf8" })
   assert.notStrictEqual(result.status, 0)
   assert.match(result.stderr, /scan failed/)
+})
+
+// The review's finding. `load` forced text mode only when the caller passed no
+// mode, so a config asking for "b" got binary chunks -- which ignore the _ENV
+// the sandbox forces, and which corrupt the VM outright when malformed. That is
+// the one input a pure-Lua sandbox cannot contain, so it is refused rather than
+// contained.
+function scanEscapes() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omakey-escape-"))
+  const output = path.join(dir, "written-through-io-output")
+  const bytecode = path.join(dir, "chunk.luac")
+  execFileSync("luac", ["-o", bytecode, "-"], { input: "return 1\n" })
+
+  const out = execFileSync("lua", [SCANNER, ESCAPES], {
+    encoding: "utf8",
+    env: Object.assign({}, process.env, {
+      OMAKEY_TEST_OUTPUT: output,
+      OMAKEY_TEST_BYTECODE: bytecode
+    })
+  })
+  return { bindings: RegistryModel.parseRegistry(out), output: output }
+}
+
+test("a config cannot load a binary chunk", () => {
+  const result = scanEscapes()
+  const binary = result.bindings.find(b => b.description.startsWith("binary="))
+  assert.strictEqual(binary.description, "binary=false")
+})
+
+test("a config cannot load bytecode off disk either", () => {
+  const result = scanEscapes()
+  const fromFile = result.bindings.find(b => b.description.startsWith("bytecodefile="))
+  assert.strictEqual(fromFile.description, "bytecodefile=false")
+})
+
+// A sandbox that omits a harmless stdlib member does not lose one binding, it
+// loses every binding: the error reaches the top-level pcall and the scan exits.
+test("an unusual config keeps its bindings", () => {
+  const result = scanEscapes()
+  assert.ok(result.bindings.some(b => b.description === "unusual survived"))
+})
+
+test("io.output cannot open a file for writing", () => {
+  const result = scanEscapes()
+  assert.strictEqual(fs.existsSync(result.output), false)
 })

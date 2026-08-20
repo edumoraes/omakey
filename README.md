@@ -327,9 +327,9 @@ real one.
 | | |
 | --- | --- |
 | Commands | `os.execute` never runs one. It reports the command as having failed |
-| Writes | `io.open` in a write mode, `os.remove`, `os.rename` and `os.tmpname` are refused |
+| Writes | `io.open` in a write mode, `os.remove`, `os.rename`, `os.tmpname` and `io.output` are refused |
 | Modules | `require` and `dofile` read Lua source through the scan's own loader; `package.cpath` is empty, so no compiled module is loaded |
-| Runtime code | anything the config compiles with `load` or `loadfile` gets the same environment — stock Lua would hand it the real one back |
+| Runtime code | `load` and `loadfile` compile text only and force the same environment — stock Lua would hand back the real one, and a *binary* chunk would ignore any environment at all, so those are refused outright |
 | Output | `print` and `io.stdout` go to a sink, so a stray print cannot pose as a binding |
 
 Reading is deliberately untouched: Omarchy's own `require_all.lua` enumerates
