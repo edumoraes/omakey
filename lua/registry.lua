@@ -177,8 +177,13 @@ end
 -- Stock `load` compiles against the real globals rather than the caller's, so
 -- without this a config could hand itself the unrestricted `os` back in one
 -- line -- the seam a partial sandbox leaks through.
-local function scoped_load(chunk, chunkname, mode, custom)
-  return load(chunk, chunkname, mode or "t", custom == nil and env or custom)
+--
+-- The caller's `mode` is deliberately discarded rather than defaulted. A binary
+-- chunk is the one input no Lua sandbox can contain: it ignores the `_ENV` set
+-- here, and a malformed one corrupts the VM before any environment applies --
+-- reproduced as a repeatable heap abort. Text only, always.
+local function scoped_load(chunk, chunkname, _mode, custom)
+  return load(chunk, chunkname, "t", custom == nil and env or custom)
 end
 
 -- "@" .. path is what keeps debug.getinfo naming the file, and origin() walks
@@ -235,10 +240,10 @@ local function sandboxed_dofile(path)
   return result
 end
 
-local function sandboxed_loadfile(path, mode, custom)
+local function sandboxed_loadfile(path, _mode, custom)
   local source = path and read_file(path)
   if not source then return refused(path or "loadfile") end
-  return scoped_load(source, "@" .. path, mode, custom)
+  return scoped_load(source, "@" .. path, nil, custom)
 end
 
 -- stdout carries the TSV this scanner exists to print, so the config is handed
@@ -264,7 +269,7 @@ env.debug = { getinfo = debug.getinfo, traceback = debug.traceback }
 
 env.os = {
   getenv = os.getenv, time = os.time, date = os.date, clock = os.clock,
-  difftime = os.difftime,
+  difftime = os.difftime, setlocale = os.setlocale,
   -- Reported as a command that ran and failed, not as an error: nvidia.lua
   -- asks `if o.shell_succeeds(...)` and a raise there would end the scan.
   execute = function() return false, "exit", 1 end,
@@ -283,7 +288,13 @@ env.io = {
   popen = enumerate,
   close = io.close,
   type = io.type,
-  read = function() return nil end,
+  -- Reading stdin is not a side effect, and io.input opens read-only. io.output
+  -- is the one that would open a file for writing, so it answers with the sink
+  -- and forgets the argument.
+  read = io.read,
+  input = io.input,
+  stdin = io.stdin,
+  output = function() return sink end,
   write = function() return sink end,
   stdout = sink,
   stderr = io.stderr,
