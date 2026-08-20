@@ -67,12 +67,23 @@ result is a full semantic registry:
 running a config that called `os.execute("touch ...")` through the scanner: the
 file was created.
 
-The claim was corrected rather than the technique, because a real sandbox breaks
-the stock install — Omarchy's `require_all.lua` enumerates its bindings
-directories with `io.popen` before the first binding is declared. What the
-scanner now contains is *effects*: writes, removes and renames are refused for
-the length of the scan. Measured on the stock config, what remains is four
-read-only calls: three `find` invocations and one hardware probe.
+**Amended again**, after the reviewer answered that filesystem shims do not
+contain repeated configuration effects — command execution and module loading
+still ran on every scan. They were right a second time, and the fix is now a
+real sandbox: the config executes against an environment the scanner builds,
+with `os.execute` refused, writes refused, `package.cpath` empty, its own
+`require`/`dofile` loader, and a `load` that forces the same environment on
+runtime-compiled chunks.
+
+The reason this was thought impossible was `require_all.lua`, which enumerates
+its bindings directories with `io.popen`. It is the one command a scan runs, and
+the config's version of it is not what runs: the `find` is matched by shape, the
+directory extracted, and the command rebuilt from the scanner's own text.
+
+The cost was measured before it was accepted: refusing command execution costs
+zero bindings, because only `nvidia.lua` shells out at load and it decides
+driver settings. Sandboxed and unsandboxed scans of the stock config produce
+byte-identical output, all 228 bindings.
 
 
 ```

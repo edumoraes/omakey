@@ -95,7 +95,7 @@ directly.
 | `SettingsModel.js` | shell.json entry precedence, defaults, normalisation |
 | `CategoryModel.js` | Source file to category, with a fallback for unknown files |
 | `ToastModel.js` | Where the hint card sits. Arithmetic, because anchors cannot be cleared |
-| `lua/registry.lua` | Binding scanner: runs the user's config with `hl` stubbed and the filesystem made read-only. Not a sandbox — see below |
+| `lua/registry.lua` | Binding scanner: runs the user's config with `hl` stubbed, inside a sandbox environment it builds itself |
 | `lua/cursor.lua` | Cursor activity poller payload |
 | `tests/` | `node --test` unit tests and recorded socket2 fixtures |
 
@@ -104,13 +104,14 @@ directly.
 1. `Service.qml` loads, resolves its own install path, and runs `Registry.qml`.
 2. `lua/registry.lua` **executes** `~/.config/hypr/hyprland.lua` in a separate
    `lua` process where `hl` is a proxy, and prints every binding as TSV. Nothing
-   reaches the compositor. It is not a sandbox and must never be described as
-   one: the standard library is the config's own, exactly as under Hyprland, and
-   `omarchy-menu-keybindings` does the same thing with the same file. What *is*
-   contained is effects — `io.open` in a write mode, `os.remove` and `os.rename`
-   are refused for the length of the scan, because omakey runs the config a
-   second time and on every reload. Reads stay, or Omarchy's `require_all.lua`
+   reaches the compositor. The config runs against an environment the scanner
+   builds: no `os.execute`, no writes, no C modules, its own `require`/`dofile`
+   loader, and a `load` that forces the same environment on runtime-compiled
+   chunks — stock `load` compiles against the real globals, which is the seam a
+   partial sandbox leaks through. Reads stay, or Omarchy's `require_all.lua`
    cannot enumerate its own bindings directories and the scan returns nothing.
+   The one command a scan runs is that enumeration, matched by shape and rebuilt
+   from the scanner's own text rather than executed as the config wrote it.
 3. `Injector.qml` builds one `hl.bind(keys, hl.dsp.event("omakey,<id>"), {})` per
    binding and applies them with `hyprctl eval`.
 4. Pressing any bound key now emits `custom>>omakey,<id>` on Hyprland's socket2 —
@@ -244,6 +245,8 @@ re-verify them if a component is upgraded.
 | No binding switches keyboard layout — `kb_layout` is an input setting | `activelayout` fires on its own from the virtual keyboard. It is noise attached to nothing, not a missing detector |
 | `hyprctl dispatch <name> <args>` is refused under the Lua config parser | Driving the compositor by hand needs `hyprctl dispatch '<lua expression>'`, the same form the bar uses |
 | `rescanPlugins` re-instantiates from Qt's cached compiled QML | Only `omarchy restart shell` picks up a QML edit |
+| Refusing `os.execute` costs zero bindings on a stock config: only `nvidia.lua` shells out at load, and the bindings that gate on a command use `o.cmd_present`, which reads PATH | The sandbox can refuse command execution outright. Verified 2026-08-19: sandboxed and unsandboxed scans are byte-identical, 228 bindings |
+| `package.searchpath` is what `require_optional.lua` asks before requiring | Leaving it out of the sandbox cost 28 bindings and killed the scan at the first optional module. It only reads |
 | `shell.summon` routes a plugin declaring `panel` **and** `bar-widget` to the panel loader (`isBarWidgetPanelPlugin` returns false once any loader kind is present) | `omarchy-shell shell toggle omakey` opens the *toast*, never the preferences panel. There is no IPC that opens it: a screenshot needs a real click, or a temporary `opened = true` in `Widget.qml` plus `omarchy restart shell` |
 | `hyprctl dispatch '<lua>'` produces the effect with no shadow beside it | It is indistinguishable from the mouse to the correlator, which is how a hint is reproduced without a pointer: `hyprctl dispatch 'hl.dsp.focus({ workspace = "4" })'` promotes `workspace:4` |
 

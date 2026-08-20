@@ -317,20 +317,36 @@ config in a short-lived `lua` process of its own, with `hl` replaced by a proxy,
 and records every `hl.bind` call instead of performing it. Nothing reaches the
 compositor.
 
-Executing is the word, and it is not a sandbox. Your config is your own code and
-Hyprland already runs it; what is new is that omakey runs it a second time, on
-load and on every config reload. So the scan is made unable to change anything:
-`io.open` in a write mode, `os.remove` and `os.rename` are refused for its
-duration.
+Your config is your own code and Hyprland already runs it. What is new is that
+omakey runs it a *second* time, on startup and on every config reload — so a
+side effect you wrote to happen once starts happening on omakey's schedule
+instead of yours. That is the part omakey is responsible for, and it is
+contained: the config runs against an environment built for the scan, not the
+real one.
 
-Reads are deliberately left alone — Omarchy's own `require_all.lua` enumerates
-its bindings directories through `io.popen` before a single binding is declared,
-so a scanner that cannot read is a scanner that finds nothing. That leaves one
-honest gap: a command your config chooses to run at load, through `os.execute`
-or a read-mode `io.popen`, still runs. On a stock Omarchy install that is four
-read-only calls, measured — three `find` invocations and one hardware probe.
+| | |
+| --- | --- |
+| Commands | `os.execute` never runs one. It reports the command as having failed |
+| Writes | `io.open` in a write mode, `os.remove`, `os.rename` and `os.tmpname` are refused |
+| Modules | `require` and `dofile` read Lua source through the scan's own loader; `package.cpath` is empty, so no compiled module is loaded |
+| Runtime code | anything the config compiles with `load` or `loadfile` gets the same environment — stock Lua would hand it the real one back |
+| Output | `print` and `io.stdout` go to a sink, so a stray print cannot pose as a binding |
 
-The scan happens in a separate process, so none of it runs inside your shell.
+Reading is deliberately untouched: Omarchy's own `require_all.lua` enumerates
+its bindings directories before a single binding is declared, and a scanner that
+cannot read finds nothing at all. That enumeration is the one command a scan
+runs, and it does not run your config's version of it — the `find` is recognised
+by shape, the directory is taken out of it, and the command is rebuilt from
+omakey's own text, so your config contributes a directory name inside a quoted
+argument and never a command.
+
+None of this costs coverage. On a stock Omarchy install the sandboxed and
+unsandboxed scans produce byte-identical output — all 228 bindings — because the
+only thing that shells out at load is the nvidia driver probe, which decides
+driver settings rather than bindings.
+
+The scan also happens in a separate process, so none of it runs inside your
+shell.
 
 ## Reporting a problem
 
