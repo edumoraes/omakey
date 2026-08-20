@@ -1,11 +1,18 @@
 -- Scans a Hyprland Lua config and prints every registered binding as TSV:
 --   keys \t modmask \t key \t description \t kind \t arg \t source
--- Runs the config inside a sandbox where `hl` is a proxy, so nothing reaches
--- the compositor. Never import this into a live Hyprland VM.
 --
--- The technique is Omarchy's own -- see omarchy-menu-keybindings. It depends
--- only on Hyprland's `hl.bind` API, not on any Omarchy internal, and it starts
--- from the user's own config file, so user overrides come for free.
+-- This is not a sandbox, and calling it one would be a lie worth correcting:
+-- the config is *executed*, in a short-lived `lua` process of its own, with
+-- `hl` replaced by a proxy so nothing reaches the compositor. The standard
+-- library is the config's own, exactly as it is under Hyprland -- which is the
+-- same thing Omarchy's `omarchy-menu-keybindings` does with the same file.
+--
+-- What is contained is effects: a scan must not change anything. See the
+-- read-only shims below for what that covers and what it deliberately does not.
+--
+-- The technique is Omarchy's own. It depends only on Hyprland's `hl.bind` API,
+-- not on any Omarchy internal, and it starts from the user's own config file,
+-- so user overrides come for free.
 
 local modifiers = { SHIFT = 1, CTRL = 4, CONTROL = 4, ALT = 8, SUPER = 64 }
 
@@ -112,6 +119,40 @@ hl = setmetatable({
     return noop
   end,
 }, { __index = function() return noop end })
+
+-- Hyprland runs this config too, so nothing here is foreign code. What is new
+-- is the second execution: omakey scans on load and again on every config
+-- reload, and a config that writes a file on load would write it every time,
+-- outside the moment the user meant it to happen. So the filesystem is made
+-- read-only for the length of the scan.
+--
+-- Reads are untouched on purpose. Omarchy's own require_all.lua enumerates its
+-- bindings directories through io.popen before a single binding is declared, so
+-- a scanner that cannot read is a scanner that returns nothing at all.
+--
+-- What this does not contain, stated plainly rather than implied: os.execute
+-- and a read-mode io.popen still run their command. The stock config uses both
+-- -- three `find` calls and one hardware probe, measured on 2026-08-19 -- and
+-- refusing them would leave the plugin silent on a default install. A command
+-- the config chooses to run is beyond what this file can honestly promise.
+local real_open, real_popen = io.open, io.popen
+
+local function refused(what)
+  return nil, tostring(what) .. ": read-only while omakey scans the config"
+end
+
+io.open = function(path, mode)
+  if mode and mode:match("[wa+]") then return refused(path) end
+  return real_open(path, mode)
+end
+
+io.popen = function(command, mode)
+  if mode and mode:match("w") then return refused(command) end
+  return real_popen(command, mode)
+end
+
+os.remove = function(path) return refused(path) end
+os.rename = function(from) return refused(from) end
 
 local config = arg and arg[1]
 if not config or config == "" then
