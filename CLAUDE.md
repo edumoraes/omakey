@@ -95,15 +95,22 @@ directly.
 | `SettingsModel.js` | shell.json entry precedence, defaults, normalisation |
 | `CategoryModel.js` | Source file to category, with a fallback for unknown files |
 | `ToastModel.js` | Where the hint card sits. Arithmetic, because anchors cannot be cleared |
-| `lua/registry.lua` | Binding scanner: stubbed-`hl` sandbox over the user's config |
+| `lua/registry.lua` | Binding scanner: runs the user's config with `hl` stubbed and the filesystem made read-only. Not a sandbox — see below |
 | `lua/cursor.lua` | Cursor activity poller payload |
 | `tests/` | `node --test` unit tests and recorded socket2 fixtures |
 
 ### Runtime flow
 
 1. `Service.qml` loads, resolves its own install path, and runs `Registry.qml`.
-2. `lua/registry.lua` scans `~/.config/hypr/hyprland.lua` in a sandbox where `hl`
-   is a proxy, and prints every binding as TSV. Nothing reaches the compositor.
+2. `lua/registry.lua` **executes** `~/.config/hypr/hyprland.lua` in a separate
+   `lua` process where `hl` is a proxy, and prints every binding as TSV. Nothing
+   reaches the compositor. It is not a sandbox and must never be described as
+   one: the standard library is the config's own, exactly as under Hyprland, and
+   `omarchy-menu-keybindings` does the same thing with the same file. What *is*
+   contained is effects — `io.open` in a write mode, `os.remove` and `os.rename`
+   are refused for the length of the scan, because omakey runs the config a
+   second time and on every reload. Reads stay, or Omarchy's `require_all.lua`
+   cannot enumerate its own bindings directories and the scan returns nothing.
 3. `Injector.qml` builds one `hl.bind(keys, hl.dsp.event("omakey,<id>"), {})` per
    binding and applies them with `hyprctl eval`.
 4. Pressing any bound key now emits `custom>>omakey,<id>` on Hyprland's socket2 —

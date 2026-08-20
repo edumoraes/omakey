@@ -4,7 +4,7 @@ import Quickshell.Io
 import "RegistryModel.js" as RegistryModel
 
 // Runs the Lua scanner over the user's Hyprland config and exposes the result
-// as binding objects. The scan happens in a sandbox, in a separate process:
+// as binding objects. The scan happens in a separate process, with `hl` stubbed:
 // nothing it evaluates reaches the compositor.
 Item {
   id: root

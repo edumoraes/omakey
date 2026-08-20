@@ -59,6 +59,22 @@ Omarchy already solves this. `omarchy-menu-keybindings` runs
 proxy tables, and captures every `hl.bind(keys, dispatcher, opts)` call. The
 result is a full semantic registry:
 
+**Amended 2026-08-19**, after a marketplace reviewer read the shipped scanner:
+"sandbox" is the wrong word for this, here and everywhere else it appeared. Both
+`omarchy-menu-keybindings` and `lua/registry.lua` reach the config through
+`pcall(dofile, ...)`, which replaces `hl` and nothing else — `os`, `io` and
+`require` are the config's own, exactly as they are under Hyprland. Confirmed by
+running a config that called `os.execute("touch ...")` through the scanner: the
+file was created.
+
+The claim was corrected rather than the technique, because a real sandbox breaks
+the stock install — Omarchy's `require_all.lua` enumerates its bindings
+directories with `io.popen` before the first binding is declared. What the
+scanner now contains is *effects*: writes, removes and renames are refused for
+the length of the scan. Measured on the stock config, what remains is four
+read-only calls: three `find` invocations and one hardware probe.
+
+
 ```
 SUPER + W        → Close window     lua    hl.dsp.window.close()
 SUPER + F        → Full screen      lua    hl.dsp.window.fullscreen({ mode = "fullscreen" })

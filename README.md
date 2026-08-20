@@ -113,9 +113,9 @@ so reloading always returns Hyprland to exactly what your own config says.
 
 Omarchy 4 configures Hyprland in Lua, and Hyprland runs *every* binding
 registered on a key combination — not just the first. omakey uses that: at
-startup it scans your config in a sandbox, then registers one extra, invisible
-binding beside each of yours, whose only job is to emit a custom event on
-Hyprland's IPC socket.
+startup it reads your config, then registers one extra, invisible binding beside
+each of yours, whose only job is to emit a custom event on Hyprland's IPC
+socket.
 
 That means the "you pressed a key" signal and the "something changed" signal
 arrive on the **same ordered stream**. When a window closes or a workspace
@@ -307,6 +307,30 @@ would bring menu entries and those toggles into reach — is drafted at
   shell's own API.
 - **Nothing leaves your machine.** No network, no telemetry. omakey reads
   Hyprland's IPC socket and your own config, and that is all.
+
+### How your config is read
+
+There is no way to recover a binding's meaning from `hyprctl binds` — under the
+Lua config provider every one of them reports as `dispatcher: __lua`. So omakey
+does what Omarchy's own `omarchy-menu-keybindings` does: it **executes** your
+config in a short-lived `lua` process of its own, with `hl` replaced by a proxy,
+and records every `hl.bind` call instead of performing it. Nothing reaches the
+compositor.
+
+Executing is the word, and it is not a sandbox. Your config is your own code and
+Hyprland already runs it; what is new is that omakey runs it a second time, on
+load and on every config reload. So the scan is made unable to change anything:
+`io.open` in a write mode, `os.remove` and `os.rename` are refused for its
+duration.
+
+Reads are deliberately left alone — Omarchy's own `require_all.lua` enumerates
+its bindings directories through `io.popen` before a single binding is declared,
+so a scanner that cannot read is a scanner that finds nothing. That leaves one
+honest gap: a command your config chooses to run at load, through `os.execute`
+or a read-mode `io.popen`, still runs. On a stock Omarchy install that is four
+read-only calls, measured — three `find` invocations and one hardware probe.
+
+The scan happens in a separate process, so none of it runs inside your shell.
 
 ## Reporting a problem
 
